@@ -174,3 +174,7 @@ Use `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, and `won
 ### Domain docs
 
 This repository uses a single root `CONTEXT.md` with system-wide ADRs in `docs/adr/`. See `docs/agents/domain.md`.
+
+### User-facing usage guide
+
+`USAGE.md` is the framework's user-facing integration, operation, and extension guide. Every user-visible feature change must update it; update `CONTEXT.md` too when terminology, architecture boundaries, or safety invariants change.

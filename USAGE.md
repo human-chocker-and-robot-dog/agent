@@ -1,0 +1,264 @@
+# DIMOS 机器狗 MCP 框架使用与开发指南
+
+本文件面向框架使用者和集成开发者，说明如何把上层 Agent/MCP Host 接入本框架、如何把本框架接入下层机器狗，以及如何在既有边界内扩展。
+
+开始使用前，先阅读根目录的 [CONTEXT.md](CONTEXT.md)。它定义了安全边界和不可违反的架构约束；本文件定义安装、接入和开发流程。
+
+## 架构与职责
+
+~~~mermaid
+flowchart LR
+    H["上层 MCP Host / Agent"] -->|HTTP MCP :9991/mcp| W["dimos-mcp-wrapper"]
+    W -->|一次 tools/call| D["dimos-dog-mcp :9990/mcp"]
+    D -->|DIMOS cmd_vel: Twist| C{"下层连接"}
+    C -->|默认| R["dry-run"]
+    C -->|显式启用| G["Unitree Go2"]
+    W -. 生命周期事件 .-> K["可选 hook"]
+~~~
+
+| 层级 | 组件 | 使用者应负责的事项 |
+| --- | --- | --- |
+| 上层 | MCP Host / Agent | 只连接包装器 MCP，并调用公开工具。 |
+| 转发层 | `integrations/dimos-mcp-wrapper` | 原样、单次转发工具调用；可发出非阻塞 hook 事件。 |
+| 下层 | `integrations/dimos-dog-mcp` | 校验运动参数、串行化动作、发布零速度结束命令，并选择 dry-run 或 Go2。 |
+| 硬件层 | DIMOS 连接模块 | 消费 `cmd_vel: Twist`；当前支持 dry-run 和显式启用的 Go2。 |
+
+上层不应直接连接下层机器狗 MCP。这样会绕过包装器的统一转发点和 hook 扩展点。
+
+## 前置条件与安全要求
+
+- 使用 Python 3.10 至 3.12；推荐 Python 3.12。DIMOS 0.0.14b1 不支持 Python 3.13 及以上。
+- 默认运行模式是 dry-run：不会连接、站立或移动真实机器狗。
+- 启用真实 Go2 前，必须完成场地隔离、独立急停、低延迟网络和厂商/DIMOS 网络预检。
+- 当前 MCP 服务没有内建访问控制。不要把 `:9990/mcp` 或 `:9991/mcp` 暴露到不受信任网络；跨主机部署时应由可信网络和外部访问控制保护。
+
+## 接入下层机器狗
+
+### 1. 安装两个 MCP 服务
+
+以下示例假设仓库绝对路径保存在 `REPOSITORY_PATH`。
+
+PowerShell：
+
+~~~powershell
+$repositoryPath = "C:/absolute/path/to/pi-hackason"
+uv venv --python 3.12
+.\.venv\Scripts\Activate.ps1
+uv pip install -e "$repositoryPath/integrations/dimos-dog-mcp"
+uv pip install -e "$repositoryPath/integrations/dimos-mcp-wrapper"
+~~~
+
+POSIX shell：
+
+~~~bash
+repository_path="/absolute/path/to/pi-hackason"
+uv venv --python 3.12
+source .venv/bin/activate
+uv pip install -e "$repository_path/integrations/dimos-dog-mcp"
+uv pip install -e "$repository_path/integrations/dimos-mcp-wrapper"
+~~~
+
+### 2. 启动下层机器狗 MCP
+
+先启动下层服务。未设置模式时，它以 dry-run 运行并监听默认地址 `http://127.0.0.1:9990/mcp`。
+
+~~~bash
+dimos-dog-mcp
+~~~
+
+下层公开四个工具：
+
+| 工具 | 参数 | 行为 |
+| --- | --- | --- |
+| `move_forward` | `speed_mps`、`duration_s` | 短时前进，结束时发布零速度。 |
+| `move_backward` | `speed_mps`、`duration_s` | 短时后退，结束时发布零速度。 |
+| `stop_motion` | 无 | 取消当前本地运动并立即发布零速度。 |
+| `motion_status` | 无 | 返回本地命令执行状态，不是机器狗遥测。 |
+
+运动速度必须在 0.01 至 0.20 m/s 之间，持续时间必须在 0.1 至 2.0 秒之间。默认值分别为 0.10 m/s 和 1.0 秒；重叠的运动请求会被拒绝。
+
+### 3. 启用真实 Unitree Go2（可选）
+
+只有在完成安全检查后，才在启动下层服务前显式设置 Go2 模式：
+
+~~~powershell
+$env:ROBOT_IP = "机器狗 IP"
+$env:DIMOS_DOG_MCP_MODE = "go2"
+uv pip install -e "$repositoryPath/integrations/dimos-dog-mcp[go2]"
+dimos-dog-mcp
+~~~
+
+Go2 模式通过 DIMOS 的 `GO2Connection` 消费 `cmd_vel: Twist`。不要将任何其他设备伪装为 Go2。
+
+若要接入非 Go2 设备，应在下层扩展中组合该设备对应的 DIMOS 连接模块，并让它消费同名、同类型的 `cmd_vel: Twist` 输入。仍须保留下层的参数校验、动作串行化和零速度停止机制；不要将这些安全逻辑移动到包装器。
+
+## 接入转发包装器
+
+包装器是上层唯一应连接的 MCP 服务。它默认监听 `http://127.0.0.1:9991/mcp`，并将请求发往 `http://127.0.0.1:9990/mcp`。
+
+在单独终端中启动包装器：
+
+~~~bash
+dimos-mcp-wrapper
+~~~
+
+跨主机或使用非默认端口时，在启动包装器前配置：
+
+~~~powershell
+$env:DIMOS_MCP_WRAPPER_UPSTREAM_URL = "http://dog-mcp-host:9990/mcp"
+$env:DIMOS_MCP_WRAPPER_PORT = "9991"
+$env:DIMOS_MCP_WRAPPER_TIMEOUT_S = "10"
+dimos-mcp-wrapper
+~~~
+
+| 环境变量 | 默认值 | 说明 |
+| --- | --- | --- |
+| `DIMOS_MCP_WRAPPER_UPSTREAM_URL` | `http://127.0.0.1:9990/mcp` | 下层 MCP 的绝对 HTTP(S) URL，必须包含路径，不能带 query 或 fragment。 |
+| `DIMOS_MCP_WRAPPER_PORT` | `9991` | 包装器监听端口。 |
+| `DIMOS_MCP_WRAPPER_TIMEOUT_S` | `10.0` | 单次下层请求的超时秒数。 |
+
+包装器只会对每个上层调用发送一次标准 JSON-RPC `tools/call` 请求。网络错误、HTTP 错误或下层 MCP 错误会返回给上层；它不会自动重试任何运动命令。
+
+## 接入上层 Agent 或 MCP Host
+
+将 MCP Host 指向包装器的 HTTP MCP 端点，而不是下层端点：
+
+~~~text
+http://包装器主机:9991/mcp
+~~~
+
+以 Claude Code 为例：
+
+~~~bash
+claude mcp add --transport http --scope project dimos-dog-wrapper http://127.0.0.1:9991/mcp
+~~~
+
+其他支持 HTTP MCP 的 Host 也应使用同一端点。Host 发现到的工具名称和参数与下层一致：
+
+| 上层调用 | 参数 | 转发结果 |
+| --- | --- | --- |
+| `move_forward` | `speed_mps`、`duration_s` | 原样传给下层 `move_forward`。 |
+| `move_backward` | `speed_mps`、`duration_s` | 原样传给下层 `move_backward`。 |
+| `stop_motion` | 无 | 立即传给下层，不等待或重试 hook。 |
+| `motion_status` | 无 | 原样返回下层的本地运动状态。 |
+
+建议的上层使用顺序：
+
+1. 首次接入时保持下层 dry-run，先调用 `motion_status`，再发起短时、低速的前进或后退请求。
+2. 需要提前结束动作时，调用 `stop_motion`；不要依赖断开 MCP 客户端连接来停止机器狗。
+3. 实机环境中不要并发发起运动工具调用。收到“动作正在进行”的错误后，先调用 `stop_motion` 或等待当前动作结束。
+4. `motion_status` 只描述本地命令执行器，不可当作定位、电量、姿态或碰撞传感器数据。
+
+## 使用生命周期 hook
+
+包装器会为每次转发投递四种事件：
+
+- `before_call`
+- `after_success`
+- `after_error`
+- `finally`
+
+一个 hook 可以处理全部四种事件；也可以同时注册多个 hook。事件按 FIFO 顺序入队，但由独立后台线程最佳努力处理，因此 hook 不会阻塞 MCP 调用路径。
+
+`before_call` 仅代表事件已入队，不保证 hook 已执行完成，也不是同步授权、拦截或命令改写点。hook 收到的是调用参数的隔离副本；hook 异常仅记录日志，不能改变下层请求、下层结果或下层错误。
+
+示例：通过自定义启动入口接入审计 hook。
+
+~~~python
+from dimos_mcp_wrapper.blueprint import build_blueprint
+from dimos_mcp_wrapper.hooks import McpCallEvent
+
+
+class AuditHook:
+    def handle(self, event: McpCallEvent) -> None:
+        if event.phase == "before_call":
+            print(f"queued: {event.call.tool_name}")
+        elif event.phase == "after_success":
+            print(f"succeeded: {event.call.tool_name}")
+        elif event.phase == "after_error":
+            print(f"failed: {event.call.tool_name}: {event.error}")
+        elif event.phase == "finally":
+            print(f"finished: {event.call.tool_name}")
+
+
+build_blueprint(hooks=(AuditHook(),)).build().loop()
+~~~
+
+多个 hook 可按以下方式注册：
+
+~~~python
+build_blueprint(hooks=(AuditHook(), MetricsHook())).build().loop()
+~~~
+
+如果未来确定“发送其他指令”的传输协议，应实现明确的 hook 适配器或独立下层适配器。不要提前增加假设性的 `send_instruction` 工具、网络协议或硬件 SDK，更不能将该逻辑做成会阻塞或重试运动调用的 hook。
+
+## 在框架上开发
+
+### 扩展下层能力
+
+新增机器狗能力时，先在 `integrations/dimos-dog-mcp` 完成能力本身：
+
+1. 定义清晰的 MCP 工具名、参数、返回值和安全边界。
+2. 在下层实现参数验证、并发/抢占策略、超时与安全停止；不要依赖上层 Agent 的提示词保证安全。
+3. 为纯业务逻辑增加单元测试；在 Python 3.10 至 3.12 且已安装 DIMOS 的环境中，为 MCP 发现或集成行为增加测试。
+4. 确认下层能够独立安全运行后，再把它公开给包装器。
+
+### 将新能力暴露到包装器
+
+包装器的职责是透明转发，不是第二个控制器。新增已确认的下层 MCP 工具时：
+
+1. 在 `DogMcpTools` 中添加与下层完全同名、参数完全一致的方法。
+2. 在 `McpForwardingSkill` 中添加同名 DIMOS `@skill` 方法。
+3. 通过 `ForwardingService` 单次转发；不得改写参数、合成运动结果或自动重试。
+4. 如需旁路行为，使用 `McpCallHook`；不得把 hook 用作同步权限判断或停止命令延迟器。
+5. 更新本文档中的工具表、配置、接入步骤和扩展说明。若架构边界或安全不变量变化，也要更新 `CONTEXT.md`。
+
+当前关键代码位置：
+
+| 目的 | 位置 |
+| --- | --- |
+| 下层 DIMOS MCP 组合 | `integrations/dimos-dog-mcp/src/dimos_dog_mcp/blueprint.py` |
+| 下层运动状态机与安全边界 | `integrations/dimos-dog-mcp/src/dimos_dog_mcp/motion_runtime.py` |
+| 包装器 MCP 组合 | `integrations/dimos-mcp-wrapper/src/dimos_mcp_wrapper/blueprint.py` |
+| 单次转发与 hook 事件 | `integrations/dimos-mcp-wrapper/src/dimos_mcp_wrapper/forwarding.py` |
+| hook 契约与后台投递 | `integrations/dimos-mcp-wrapper/src/dimos_mcp_wrapper/hooks.py` |
+
+### 本地验证
+
+两个集成都提供不依赖真实硬件的单元测试。分别在对应目录执行：
+
+~~~powershell
+Set-Location "C:/absolute/path/to/pi-hackason/integrations/dimos-dog-mcp"
+$env:PYTHONPATH = "$PWD/src"
+python -m unittest discover -s tests -v
+~~~
+
+~~~powershell
+Set-Location "C:/absolute/path/to/pi-hackason/integrations/dimos-mcp-wrapper"
+$env:PYTHONPATH = "$PWD/src"
+python -m unittest discover -s tests -v
+~~~
+
+包装器的 DIMOS 原生 `tools/list` 集成测试需要 Python 3.10 至 3.12 和已安装的 DIMOS；不兼容环境会跳过该测试。
+
+## 常见问题
+
+| 现象 | 排查方向 |
+| --- | --- |
+| 上层看不到工具 | 确认连接的是包装器 `:9991/mcp`，且包装器使用兼容 Python 正常启动。 |
+| 包装器报告上游不可用 | 确认下层 `dimos-dog-mcp` 已启动，并检查 `DIMOS_MCP_WRAPPER_UPSTREAM_URL`。 |
+| 调用成功但机器狗不动 | 默认是 dry-run；确认是否经过安全预检后显式设置了 `DIMOS_DOG_MCP_MODE=go2`。 |
+| 想用 hook 拦截危险动作 | 当前 hook 不是拦截器。应在下层实现明确、可测试的安全策略。 |
+| 动作未按预期结束 | 立即调用 `stop_motion`，再检查下层日志和独立急停状态。 |
+
+## 文档维护规则
+
+`USAGE.md` 是面向框架使用者的公开使用契约。每次新增、删除或改变任何用户可见功能时，变更尚未完成，直到本文档同步更新。至少检查以下内容：
+
+- 工具名称、参数、返回值和安全限制；
+- 上下层端点、安装/启动步骤和环境变量；
+- hook 生命周期与扩展方式；
+- 下层硬件适配方式；
+- 测试或运行前置条件。
+
+若变更同时影响术语、架构边界或安全不变量，还必须同步更新 `CONTEXT.md`。
