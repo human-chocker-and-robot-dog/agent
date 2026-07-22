@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools==70.0.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dimos-dog-mcp"
+version = "0.1.0"
+description = "Safety-bounded DIMOS MCP skills for basic quadruped motion"
+requires-python = ">=3.10,<3.13"
+dependencies = ["dimos[base]==0.0.14b1"]
+
+[project.optional-dependencies]
+go2 = ["dimos[unitree]==0.0.14b1"]
+
+[project.scripts]
+dimos-dog-mcp = "dimos_dog_mcp.blueprint:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

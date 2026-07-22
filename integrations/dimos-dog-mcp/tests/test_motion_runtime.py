@@ -1,0 +1,94 @@
+from __future__ import annotations
+
+import threading
+import unittest
+
+from dimos_dog_mcp.config import RuntimeMode, read_runtime_mode
+from dimos_dog_mcp.motion_runtime import (
+    MotionBusyError,
+    MotionRuntime,
+    VelocityCommand,
+    validate_motion_request,
+)
+
+
+class MotionRuntimeTests(unittest.TestCase):
+    def test_completed_motion_repeatedly_publishes_then_stops(self) -> None:
+        published: list[VelocityCommand] = []
+        runtime = MotionRuntime(published.append, publish_hz=100.0)
+
+        outcome = runtime.execute(VelocityCommand(0.1, 0.0, 0.0, 0.03))
+
+        self.assertEqual(outcome.state, "completed")
+        self.assertGreaterEqual(len(published), 2)
+        self.assertEqual(published[0].linear_x, 0.1)
+        self.assertEqual(published[-1], VelocityCommand.zero())
+        self.assertFalse(runtime.status().active)
+
+    def test_stop_preempts_active_motion_and_publishes_zero(self) -> None:
+        published: list[VelocityCommand] = []
+        first_nonzero = threading.Event()
+
+        def publish(command: VelocityCommand) -> None:
+            published.append(command)
+            if command.linear_x != 0.0:
+                first_nonzero.set()
+
+        runtime = MotionRuntime(publish, publish_hz=100.0)
+        runtime.start(VelocityCommand(0.1, 0.0, 0.0, 1.0))
+        self.assertTrue(first_nonzero.wait(timeout=1.0))
+        self.assertTrue(runtime.stop())
+
+        self.assertFalse(runtime.status().active)
+        self.assertEqual(published[-1], VelocityCommand.zero())
+
+    def test_background_motion_expires_with_a_zero_command(self) -> None:
+        published: list[VelocityCommand] = []
+        completed = threading.Event()
+
+        def publish(command: VelocityCommand) -> None:
+            published.append(command)
+            if command == VelocityCommand.zero():
+                completed.set()
+
+        runtime = MotionRuntime(publish, publish_hz=100.0)
+        runtime.start(VelocityCommand(0.1, 0.0, 0.0, 0.03))
+
+        self.assertTrue(completed.wait(timeout=1.0))
+        self.assertFalse(runtime.status().active)
+        self.assertEqual(published[-1], VelocityCommand.zero())
+
+    def test_overlapping_motion_is_rejected(self) -> None:
+        first_nonzero = threading.Event()
+        runtime = MotionRuntime(
+            lambda command: first_nonzero.set() if command.linear_x != 0.0 else None,
+            publish_hz=100.0,
+        )
+
+        thread = threading.Thread(
+            target=lambda: runtime.execute(VelocityCommand(0.1, 0.0, 0.0, 1.0))
+        )
+        thread.start()
+        self.assertTrue(first_nonzero.wait(timeout=1.0))
+
+        with self.assertRaises(MotionBusyError):
+            runtime.execute(VelocityCommand(-0.1, 0.0, 0.0, 0.2))
+
+        runtime.stop()
+        thread.join(timeout=1.0)
+        self.assertFalse(thread.is_alive())
+
+    def test_motion_limits_reject_unsafe_values(self) -> None:
+        self.assertEqual(validate_motion_request(0.1, 1.0), (0.1, 1.0))
+        with self.assertRaises(ValueError):
+            validate_motion_request(0.0, 1.0)
+        with self.assertRaises(ValueError):
+            validate_motion_request(0.21, 1.0)
+        with self.assertRaises(ValueError):
+            validate_motion_request(0.1, 2.1)
+
+    def test_default_mode_is_dry_run_and_invalid_mode_fails(self) -> None:
+        self.assertIs(read_runtime_mode({}), RuntimeMode.DRY_RUN)
+        self.assertIs(read_runtime_mode({"DIMOS_DOG_MCP_MODE": "go2"}), RuntimeMode.GO2)
+        with self.assertRaises(ValueError):
+            read_runtime_mode({"DIMOS_DOG_MCP_MODE": "live"})
