@@ -226,23 +226,6 @@ class McpForwardingSkill(Module):
         return self._dog_tools.stop_looking_out()
 
     @skill
-    def follow_person(
-        self,
-        query: str,
-        initial_bbox: list[float] | None = None,
-        initial_image: str | None = None,
-    ) -> str:
-        """Start official visual person following."""
-
-        return self._dog_tools.follow_person(query, initial_bbox, initial_image)
-
-    @skill
-    def stop_following(self) -> str:
-        """Stop official visual person following."""
-
-        return self._dog_tools.stop_following()
-
-    @skill
     def start_stroll(self) -> str:
         """Start non-exhaustive, branch-committing human-like strolling."""
 

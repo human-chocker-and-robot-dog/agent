@@ -42,8 +42,6 @@ class DogMcpToolsTests(unittest.TestCase):
         self.assertEqual(tools.stop_patrol(), "stop_patrol")
         self.assertEqual(tools.look_out_for(["人"], None), "look_out_for")
         self.assertEqual(tools.stop_looking_out(), "stop_looking_out")
-        self.assertEqual(tools.follow_person("穿蓝衣服的人", None, None), "follow_person")
-        self.assertEqual(tools.stop_following(), "stop_following")
         self.assertEqual(tools.start_stroll(), "start_stroll")
         self.assertEqual(tools.stop_stroll(), "stop_stroll")
 
@@ -73,15 +71,6 @@ class DogMcpToolsTests(unittest.TestCase):
                 ("stop_patrol", {}),
                 ("look_out_for", {"description_of_things": ["人"], "then": None}),
                 ("stop_looking_out", {}),
-                (
-                    "follow_person",
-                    {
-                        "query": "穿蓝衣服的人",
-                        "initial_bbox": None,
-                        "initial_image": None,
-                    },
-                ),
-                ("stop_following", {}),
                 ("start_stroll", {}),
                 ("stop_stroll", {}),
             ],

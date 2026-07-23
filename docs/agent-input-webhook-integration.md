@@ -28,7 +28,7 @@
 3. 对相同 `instruction_id` 和相同 `text` 的重投做幂等去重。
 4. 拒绝相同 `instruction_id` 对应不同 `text` 的冲突请求。
 5. 将普通输入按持久化受理顺序串行交给一个固定 Pi Agent 会话。
-6. 只向该 Agent 暴露固定的 27 个机器狗 MCP 工具，并关闭 Pi 内建编码工具。
+6. 只向该 Agent 暴露固定的 25 个机器狗 MCP 工具，并关闭 Pi 内建编码工具。
 7. 将规范化后精确等于“停”或 `stop` 的文本作为停止快速路径处理。
 8. 将 Agent 最终回复或固定失败文本持久化到 outbox。
 9. 通过部署级回复 Webhook 发送完整的最终用户可见文本。
@@ -91,8 +91,8 @@ flowchart LR
 | 输入端 | 麦克风、唤醒、ASR、分段、确认一次完整真实请求、生成并持久化 `instruction_id`、提交和重试。 | 不直接调用 MCP，不指定 Agent 会话，不解释 `202` 为动作成功。 |
 | Agent Webhook Gateway | HTTP 校验、inbox/outbox、幂等、调度、固定 Agent 会话、停止快速路径和回复重投。 | 不采集音频，不判断一次 Webhook 是否是真实请求，不提供认证，不提供物理急停。 |
 | 固定 Pi Agent | 接收普通用户文本，根据系统提示词选择最终回复和 MCP 工具调用。 | 不接收外部会话 ID，不启用 Pi 内建编码工具、skills、extensions 或 context files。 |
-| MCP 包装器 | 将 DiMOS `0.0.14b1` 中除 `speak` 外的 20 个官方工具和 7 个自研工具单次转发到机器狗 MCP，并执行旁路生命周期 hook。 | 不接收用户自然语言，不重复运动命令，不承担 Webhook 回复投递。 |
-| 机器狗 MCP | 暴露版本化的 27 工具契约，验证自研运动参数，并在 dry-run 或 Go2 模式执行官方能力与导航扩展。 | 不生成用户回复，不接收 `instruction_id`，不运行 OpenAI TTS。 |
+| MCP 包装器 | 将 DiMOS `0.0.14b1` 中除 `speak`、`follow_person`、`stop_following` 外的 18 个官方工具和 7 个自研工具单次转发到机器狗 MCP，并执行旁路生命周期 hook。 | 不接收用户自然语言，不重复运动命令，不承担 Webhook 回复投递。 |
+| 机器狗 MCP | 暴露版本化的 25 工具契约，验证自研运动参数，并在 dry-run 或 Go2 模式执行官方能力与导航扩展。 | 不生成用户回复，不接收 `instruction_id`，不运行 OpenAI TTS 或需要 `ALIBABA_API_KEY` 的人员跟随。 |
 | 回复接收端 | 持久化并按 `reply_id` 去重，向最终用户显示或通过 TTS 朗读 `text`。 | 不期待模型 token、工具结果、内部错误或独立失败事件。 |
 
 ## 4. 输入端 HTTP 契约
@@ -303,7 +303,7 @@ HTTP `202` 只会在 `acceptInstruction` 完成后发送。
 - context files
 - Pi 内建编码工具
 
-当前只注册并保持激活以下 27 个自定义工具。它们全部向包装器发送一次同名 `tools/call`：
+当前只注册并保持激活以下 25 个自定义工具。它们全部向包装器发送一次同名 `tools/call`：
 
 | 工具 | 参数 | Gateway 到包装器的行为 |
 | --- | --- | --- |
@@ -330,8 +330,6 @@ HTTP `202` 只会在 `acceptInstruction` 完成后发送。
 | `stop_patrol` | 无 | 停止巡逻。 |
 | `look_out_for` | `description_of_things: string[]`、可选 `then` | 持续查找目标，可在发现后调用另一工具。 |
 | `stop_looking_out` | 无 | 停止视觉查找。 |
-| `follow_person` | `query`、可选 `initial_bbox`、`initial_image` | 启动官方人员跟随。 |
-| `stop_following` | 无 | 停止人员跟随。 |
 | `start_stroll` | 无 | 启动随机选支、不回头补覆盖的人类式散步。 |
 | `stop_stroll` | 无 | 停止散步。 |
 
@@ -460,7 +458,7 @@ HTTP `202` 只会在 `acceptInstruction` 完成后发送。
 上述自然语言语义目前只存在于：
 
 - Agent 系统提示词；
-- 27 个工具的名称、描述和 TypeBox 参数 schema。
+- 25 个工具的名称、描述和 TypeBox 参数 schema。
 
 当前不存在：
 
@@ -918,7 +916,7 @@ npx tsc -p tsconfig.json --noEmit
 - MCP `result.isError` 被识别为失败。
 - DIMOS 异常文本和结构化工具错误被识别为失败。
 - 系统提示词包含“最终输出会直接发给用户”和运动语义。
-- 固定 Agent 只激活版本化的 27 个机器狗工具。
+- 固定 Agent 只激活版本化的 25 个机器狗工具。
 - 必填回复 URL 和主要默认配置。
 
 当前自动化测试没有覆盖：
@@ -963,8 +961,8 @@ npx tsc -p tsconfig.json --noEmit
 - [ ] Pi 模型和认证在 `AGENT_WEBHOOK_AGENT_DIR` 中有效。
 - [ ] 包装器 MCP 可从网关主机访问。
 - [ ] 机器狗 MCP 初次联调运行在 dry-run。
-- [ ] `tools/list` 在底层和包装器均精确返回版本化的 27 个工具，且不包含 `speak`。
-- [ ] 27 个工具在真实包装器链路上保持同名、同参数、单次转发。
+- [ ] `tools/list` 在底层和包装器均精确返回版本化的 25 个工具，且不包含 `speak`、`follow_person`、`stop_following`。
+- [ ] 25 个工具在真实包装器链路上保持同名、同参数、单次转发。
 - [ ] 每个工具调用只到达下游一次。
 - [ ] “停”、“停。”、“ STOP ”和“stop!”绕过 Agent。
 - [ ] “别停”、“停止”、“请停下来”和“stop now”不会误入快速路径。

@@ -150,30 +150,6 @@ class DryRunNavigationSkill(Module):
 
         return self._unavailable("stop_looking_out")
 
-    @skill
-    def follow_person(
-        self,
-        query: str,
-        initial_bbox: list[float] | None = None,
-        initial_image: str | None = None,
-    ) -> str:
-        """Report that person following requires the live Go2 stack."""
-
-        return self._unavailable(
-            "follow_person",
-            {
-                "query": query,
-                "initial_bbox": initial_bbox,
-                "initial_image": initial_image,
-            },
-        )
-
-    @skill
-    def stop_following(self) -> str:
-        """Report that no live person-following process is active in dry-run."""
-
-        return self._unavailable("stop_following")
-
     @staticmethod
     def _unavailable(tool_name: str, arguments: dict[str, object] | None = None) -> str:
         return json.dumps(

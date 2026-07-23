@@ -33,7 +33,7 @@ class AgentBridgeTests(unittest.TestCase):
         with patch("dimos_dog_mcp.agent_bridge.urlopen", return_value=Response()) as request:
             bridge.dispatch_continuation(
                 {
-                    "tool": "follow_person",
+                    "tool": "navigate_with_text",
                     "args": {
                         "query": "$label",
                     },
@@ -51,7 +51,7 @@ class AgentBridgeTests(unittest.TestCase):
                 "id": "perception-continuation",
                 "method": "tools/call",
                 "params": {
-                    "name": "follow_person",
+                    "name": "navigate_with_text",
                     "arguments": {"query": "walker"},
                 },
             },
@@ -72,11 +72,9 @@ class AgentBridgeTests(unittest.TestCase):
 
         name, arguments = build_continuation_call(
             {
-                "tool": "follow_person",
+                "tool": "navigate_with_text",
                 "args": {
                     "query": "$label",
-                    "initial_bbox": "$bbox",
-                    "literal": "person",
                 },
             },
             {
@@ -85,13 +83,11 @@ class AgentBridgeTests(unittest.TestCase):
             },
         )
 
-        self.assertEqual(name, "follow_person")
+        self.assertEqual(name, "navigate_with_text")
         self.assertEqual(
             arguments,
             {
                 "query": "walker",
-                "initial_bbox": [1, 2, 3, 4],
-                "literal": "person",
             },
         )
 

@@ -43,8 +43,6 @@ describe("fixed Pi agent runtime", () => {
 			"stop_patrol",
 			"look_out_for",
 			"stop_looking_out",
-			"follow_person",
-			"stop_following",
 			"start_stroll",
 			"stop_stroll",
 		]);
@@ -85,8 +83,6 @@ describe("fixed Pi agent runtime", () => {
 				"stop_patrol",
 				"look_out_for",
 				"stop_looking_out",
-				"follow_person",
-				"stop_following",
 				"start_stroll",
 				"stop_stroll",
 			]);

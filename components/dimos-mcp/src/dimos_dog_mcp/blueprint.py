@@ -18,7 +18,6 @@ from .stroll import StrollSkill
 
 try:
     from dimos.agents.skills.navigation import NavigationSkillContainer
-    from dimos.agents.skills.person_follow import PersonFollowSkillContainer
     from dimos.robot.unitree.go2.blueprints.smart.unitree_go2_spatial import (
         unitree_go2_spatial,
     )
@@ -26,7 +25,6 @@ try:
     from dimos.robot.unitree.unitree_skill_container import UnitreeSkillContainer
 except ModuleNotFoundError:
     NavigationSkillContainer = None
-    PersonFollowSkillContainer = None
     unitree_go2_spatial = None
     GO2Connection = None
     UnitreeSkillContainer = None
@@ -50,7 +48,6 @@ def _build_go2_blueprint():
 
     if (
         NavigationSkillContainer is None
-        or PersonFollowSkillContainer is None
         or unitree_go2_spatial is None
         or GO2Connection is None
         or UnitreeSkillContainer is None
@@ -63,7 +60,6 @@ def _build_go2_blueprint():
     return autoconnect(
         unitree_go2_spatial,
         NavigationSkillContainer.blueprint(),
-        PersonFollowSkillContainer.blueprint(camera_info=GO2Connection.camera_info_static),
         UnitreeSkillContainer.blueprint(),
         HomeNavigationSkill.blueprint(),
         StrollSkill.blueprint(),

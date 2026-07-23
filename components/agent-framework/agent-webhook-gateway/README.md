@@ -1,6 +1,6 @@
 # Agent Webhook Gateway
 
-该服务实现固定 Pi Agent 会话的持久化输入网关和输出投递器。输入端只提交用户文本；Agent 通过 `dimos-mcp-wrapper` 使用 DiMOS `0.0.14b1` 中除 `speak` 外的 20 个官方工具和 7 个自研工具；回复接收端只收到完整的最终用户可见文本，并可在上层进行 TTS。
+该服务实现固定 Pi Agent 会话的持久化输入网关和输出投递器。输入端只提交用户文本；Agent 通过 `dimos-mcp-wrapper` 使用 DiMOS `0.0.14b1` 中除 `speak`、`follow_person`、`stop_following` 外的 18 个官方工具和 7 个自研工具；回复接收端只收到完整的最终用户可见文本，并可在上层进行 TTS。
 
 ```mermaid
 flowchart LR

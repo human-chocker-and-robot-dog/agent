@@ -135,24 +135,6 @@ class DogMcpTools:
     def stop_looking_out(self) -> str:
         return self._forwarder.forward("stop_looking_out", {})
 
-    def follow_person(
-        self,
-        query: str,
-        initial_bbox: list[float] | None,
-        initial_image: str | None,
-    ) -> str:
-        return self._forwarder.forward(
-            "follow_person",
-            {
-                "query": query,
-                "initial_bbox": initial_bbox,
-                "initial_image": initial_image,
-            },
-        )
-
-    def stop_following(self) -> str:
-        return self._forwarder.forward("stop_following", {})
-
     def start_stroll(self) -> str:
         return self._forwarder.forward("start_stroll", {})
 
