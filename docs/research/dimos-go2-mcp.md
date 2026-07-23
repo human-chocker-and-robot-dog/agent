@@ -18,7 +18,7 @@
 
 ## MVP 设计
 
-实现最初位于 `integrations/dimos-dog-mcp`，现已抽离为根目录独立包 `dimos-mcp`，不修改 DIMOS 或 Pi 核心：
+实现最初位于 `integrations/dimos-dog-mcp`，现已抽离为组合仓库中的独立组件 `components/dimos-mcp`，不修改 DIMOS 或 Pi 核心：
 
 1. `DogMotionSkill` 使用 `@skill` 暴露 `move_forward`、`move_backward`、`stop_motion`、`motion_status`。
 2. 技能将速度转成标准 DIMOS `Twist`，并发布到 `cmd_vel`。

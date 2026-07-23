@@ -2,7 +2,7 @@
 
 > 文档版本：MVP v0.1
 >
-> 实现位置：`integrations/agent-webhook-gateway`
+> 实现位置：`components/agent-framework/agent-webhook-gateway`
 >
 > 当前状态：源代码、单元测试和 TypeScript 类型检查已经完成；目标环境部署、真实模型、真实 MCP 包装器、机器狗 MCP 和回复接收端的端到端联调尚未完成。
 >
@@ -15,7 +15,7 @@
 - 根目录 [CONTEXT.md](../CONTEXT.md)：系统边界、术语和不可违反的不变量。
 - 根目录 [USAGE.md](../USAGE.md)：机器狗 MCP、MCP 包装器、hook 和完整部署方式。
 - [ADR-0001](adr/0001-agent-webhook-inbox-outbox.md)：选择持久化 inbox/outbox Webhook 架构的原因。
-- 网关目录 [README.md](../integrations/agent-webhook-gateway/README.md)：网关本身的安装、配置和开发入口。
+- 网关目录 [README.md](../components/agent-framework/agent-webhook-gateway/README.md)：网关本身的安装、配置和开发入口。
 
 ## 1. 交付范围
 
@@ -684,7 +684,7 @@ $env:AGENT_WEBHOOK_DEFAULT_SPEED_MPS = "0.1"
 ### 12.2 构建
 
 ```powershell
-Set-Location "C:/absolute/path/to/pi-hackason/integrations/agent-webhook-gateway"
+Set-Location "C:/absolute/path/to/pi-hackason/components/agent-framework/agent-webhook-gateway"
 npm ci --ignore-scripts
 npm run build
 ```
@@ -692,7 +692,7 @@ npm run build
 构建输出目录为：
 
 ```text
-integrations/agent-webhook-gateway/dist
+components/agent-framework/agent-webhook-gateway/dist
 ```
 
 当前仓库不提交 `dist`，部署时必须执行构建。
@@ -864,7 +864,7 @@ async function receiveReply(request: Request): Promise<Response> {
 当前项目已经通过：
 
 ```powershell
-Set-Location "E:/Documents/GitHub/pi-hackason/integrations/agent-webhook-gateway"
+Set-Location "E:/Documents/GitHub/pi-hackason/components/agent-framework/agent-webhook-gateway"
 npm test
 npx tsc -p tsconfig.json --noEmit
 ```

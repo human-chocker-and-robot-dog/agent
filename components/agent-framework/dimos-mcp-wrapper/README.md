@@ -1,6 +1,6 @@
 # DIMOS MCP 薄包装器
 
-该组件本身是一个 DIMOS 原生 MCP 服务。它不控制机器狗，也不复制运动逻辑；它把机器狗 MCP 工具调用转发给已运行的根目录独立 `dimos-mcp`，并在转发路径上发出不会阻塞调用的生命周期 hook。
+该组件本身是一个 DIMOS 原生 MCP 服务。它不控制机器狗，也不复制运动逻辑；它把机器狗 MCP 工具调用转发给已运行的独立 `components/dimos-mcp`，并在转发路径上发出不会阻塞调用的生命周期 hook。
 
 ```mermaid
 flowchart LR
@@ -12,19 +12,19 @@ flowchart LR
 
 ## 安装与启动
 
-DIMOS `0.0.14b1` 要求 Python 3.10 至 3.12。底层机器应按根目录 `dimos-mcp/README.md` 独立启动机器狗 MCP。若同机部署：
+DIMOS `0.0.14b1` 要求 Python 3.10 至 3.12。底层机器应按 `components/dimos-mcp/README.md` 独立启动机器狗 MCP。若同机部署：
 
 ```bash
 uv venv --python 3.12
 source .venv/bin/activate
-uv pip install -e /absolute/path/to/pi-hackason/dimos-mcp
+uv pip install -e /absolute/path/to/pi-hackason/components/dimos-mcp
 dimos-dog-mcp
 ```
 
 再启动包装器。默认上游为 `http://127.0.0.1:9990/mcp`，包装器自身监听 `http://127.0.0.1:9991/mcp`，因此两个服务不会抢占端口。
 
 ```bash
-uv pip install -e /absolute/path/to/pi-hackason/integrations/dimos-mcp-wrapper
+uv pip install -e /absolute/path/to/pi-hackason/components/agent-framework/dimos-mcp-wrapper
 dimos-mcp-wrapper
 ```
 
@@ -100,7 +100,7 @@ ModuleCoordinator.build(build_blueprint(hooks=(AuditHook(),))).loop()
 ## 测试
 
 ```powershell
-Set-Location /absolute/path/to/pi-hackason/integrations/dimos-mcp-wrapper
+Set-Location /absolute/path/to/pi-hackason/components/agent-framework/dimos-mcp-wrapper
 $env:PYTHONPATH = "$PWD/src"
 python -m unittest discover -s tests -v
 ```

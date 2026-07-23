@@ -31,8 +31,8 @@
 		"packages/storage/*/src/**/*",
 		"packages/storage/*/test/**/*",
 		"packages/coding-agent/examples/**/*",
-		"integrations/agent-webhook-gateway/src/**/*",
-		"integrations/agent-webhook-gateway/test/**/*"
+		"components/agent-framework/agent-webhook-gateway/src/**/*",
+		"components/agent-framework/agent-webhook-gateway/test/**/*"
 	],
 	"exclude": ["**/dist/**", "packages/coding-agent/examples/extensions/gondolin/**"]
 }

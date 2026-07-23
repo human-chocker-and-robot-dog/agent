@@ -36,7 +36,7 @@ flowchart LR
 
 ## 在底层机器安装
 
-将根目录 `dimos-mcp` 文件夹复制到机器狗侧主机。它是独立 Python 包，不需要复制仓库中的 `packages/`、Agent 网关或包装器。
+将组合仓库中的 `components/dimos-mcp` 文件夹复制到机器狗侧主机。它是独立 Python 包，不需要复制仓库中的 `packages/` 或 `components/agent-framework`。
 
 POSIX：
 
@@ -188,7 +188,7 @@ claude mcp add --transport http --scope project dimos-dog http://192.168.66.160:
 
 ### 通过本项目包装器
 
-如果上层需要 `before_call`、`after_success`、`after_error` 和 `finally` hook，应在上层机器运行 `integrations/dimos-mcp-wrapper`：
+如果上层需要 `before_call`、`after_success`、`after_error` 和 `finally` hook，应在上层机器运行 `components/agent-framework/dimos-mcp-wrapper`：
 
 ```powershell
 $env:DIMOS_MCP_WRAPPER_UPSTREAM_URL = "http://192.168.66.160:9990/mcp"

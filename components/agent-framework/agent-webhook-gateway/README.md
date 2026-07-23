@@ -16,7 +16,7 @@ flowchart LR
 需要 Node.js 22.19 或更高版本。先确保 `dimos-dog-mcp` 和 `dimos-mcp-wrapper` 已按仓库根目录 `USAGE.md` 启动。
 
 ```powershell
-Set-Location "C:/absolute/path/to/pi-hackason/integrations/agent-webhook-gateway"
+Set-Location "C:/absolute/path/to/pi-hackason/components/agent-framework/agent-webhook-gateway"
 npm ci --ignore-scripts
 npm run build
 ```
