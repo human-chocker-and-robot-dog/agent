@@ -95,6 +95,65 @@ class McpForwardingSkill(Module):
         return self._dog_tools.motion_status()
 
     @skill
+    def server_status(self) -> str:
+        """Forward the official DIMOS MCP server-status query."""
+
+        return self._dog_tools.server_status()
+
+    @skill
+    def list_modules(self) -> str:
+        """Forward the official DIMOS deployed-module query."""
+
+        return self._dog_tools.list_modules()
+
+    @skill
+    def agent_send(self, message: str) -> str:
+        """Forward a message to the lower DIMOS agent transport."""
+
+        return self._dog_tools.agent_send(message)
+
+    @skill
+    def relative_move(
+        self,
+        forward: float = 0.0,
+        left: float = 0.0,
+        degrees: float = 0.0,
+    ) -> str:
+        """Forward official relative movement in the robot's current frame."""
+
+        return self._dog_tools.relative_move(forward, left, degrees)
+
+    @skill
+    def wait(self, seconds: float) -> str:
+        """Forward the official DIMOS wait tool."""
+
+        return self._dog_tools.wait(seconds)
+
+    @skill
+    def current_time(self) -> str:
+        """Forward the official DIMOS current-time tool."""
+
+        return self._dog_tools.current_time()
+
+    @skill
+    def execute_sport_command(self, command_name: str) -> str:
+        """Forward a named Unitree sport command."""
+
+        return self._dog_tools.execute_sport_command(command_name)
+
+    @skill
+    def get_battery_soc(self) -> str:
+        """Forward the official Go2 battery state-of-charge query."""
+
+        return self._dog_tools.get_battery_soc()
+
+    @skill
+    def observe(self) -> str:
+        """Forward the official Go2 camera observation tool."""
+
+        return self._dog_tools.observe()
+
+    @skill
     def tag_location(self, location_name: str) -> str:
         """Tag the robot's current mapped location with a reusable name.
 
@@ -113,6 +172,12 @@ class McpForwardingSkill(Module):
         """
 
         return self._dog_tools.navigate_with_text(query)
+
+    @skill
+    def return_to_start(self) -> str:
+        """Return to the first valid odometry pose captured by the upstream process."""
+
+        return self._dog_tools.return_to_start()
 
     @skill
     def stop_navigation(self) -> str:
@@ -143,3 +208,48 @@ class McpForwardingSkill(Module):
         """Stop official DIMOS autonomous patrol."""
 
         return self._dog_tools.stop_patrol()
+
+    @skill
+    def look_out_for(
+        self,
+        description_of_things: list[str],
+        then: dict[str, object] | None = None,
+    ) -> str:
+        """Continuously look for one of the described things."""
+
+        return self._dog_tools.look_out_for(description_of_things, then)
+
+    @skill
+    def stop_looking_out(self) -> str:
+        """Stop the active visual lookout."""
+
+        return self._dog_tools.stop_looking_out()
+
+    @skill
+    def follow_person(
+        self,
+        query: str,
+        initial_bbox: list[float] | None = None,
+        initial_image: str | None = None,
+    ) -> str:
+        """Start official visual person following."""
+
+        return self._dog_tools.follow_person(query, initial_bbox, initial_image)
+
+    @skill
+    def stop_following(self) -> str:
+        """Stop official visual person following."""
+
+        return self._dog_tools.stop_following()
+
+    @skill
+    def start_stroll(self) -> str:
+        """Start non-exhaustive, branch-committing human-like strolling."""
+
+        return self._dog_tools.start_stroll()
+
+    @skill
+    def stop_stroll(self) -> str:
+        """Stop the active human-like stroll."""
+
+        return self._dog_tools.stop_stroll()

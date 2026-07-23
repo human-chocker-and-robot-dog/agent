@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import socket
 import sys
 import threading
 import unittest
@@ -16,6 +17,8 @@ class DimosIntegrationTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls._previous_mode = os.environ.get("DIMOS_DOG_MCP_MODE")
+        cls._previous_mcp_port_env = os.environ.get("MCP_PORT")
+        cls._previous_listen_host_env = os.environ.get("LISTEN_HOST")
         os.environ["DIMOS_DOG_MCP_MODE"] = "dry-run"
 
         from dimos.agents.mcp.mcp_adapter import McpAdapter
@@ -28,7 +31,12 @@ class DimosIntegrationTests(unittest.TestCase):
         cls._previous_host = global_config.listen_host
         cls._previous_port = global_config.mcp_port
         global_config.update(viewer="none", n_workers=1)
-        configure_mcp_listener(McpServerConfig(host="0.0.0.0", port=9990))
+        with socket.socket() as listener:
+            listener.bind(("0.0.0.0", 0))
+            cls._test_port = listener.getsockname()[1]
+        os.environ["MCP_PORT"] = str(cls._test_port)
+        os.environ["LISTEN_HOST"] = "0.0.0.0"
+        configure_mcp_listener(McpServerConfig(host="0.0.0.0", port=cls._test_port))
         cls._coordinator = ModuleCoordinator.build(build_blueprint())
         cls._adapter = McpAdapter()
         if not cls._adapter.wait_for_ready(timeout=10):
@@ -47,6 +55,14 @@ class DimosIntegrationTests(unittest.TestCase):
             os.environ.pop("DIMOS_DOG_MCP_MODE", None)
         else:
             os.environ["DIMOS_DOG_MCP_MODE"] = cls._previous_mode
+        if cls._previous_mcp_port_env is None:
+            os.environ.pop("MCP_PORT", None)
+        else:
+            os.environ["MCP_PORT"] = cls._previous_mcp_port_env
+        if cls._previous_listen_host_env is None:
+            os.environ.pop("LISTEN_HOST", None)
+        else:
+            os.environ["LISTEN_HOST"] = cls._previous_listen_host_env
 
     def tearDown(self) -> None:
         self._adapter.call(
@@ -57,7 +73,7 @@ class DimosIntegrationTests(unittest.TestCase):
             },
         )
 
-    def test_native_mcp_discovers_the_public_motion_and_navigation_tools(self) -> None:
+    def test_native_mcp_discovers_supported_pinned_official_and_custom_tools(self) -> None:
         result = self._adapter.call("tools/list")
         names = {tool["name"] for tool in result["result"]["tools"]}
         self.assertEqual(
@@ -67,6 +83,15 @@ class DimosIntegrationTests(unittest.TestCase):
                 "move_backward",
                 "stop_motion",
                 "motion_status",
+                "server_status",
+                "list_modules",
+                "agent_send",
+                "relative_move",
+                "wait",
+                "current_time",
+                "execute_sport_command",
+                "get_battery_soc",
+                "observe",
                 "tag_location",
                 "navigate_with_text",
                 "stop_navigation",
@@ -74,6 +99,13 @@ class DimosIntegrationTests(unittest.TestCase):
                 "end_exploration",
                 "start_patrol",
                 "stop_patrol",
+                "look_out_for",
+                "stop_looking_out",
+                "follow_person",
+                "stop_following",
+                "return_to_start",
+                "start_stroll",
+                "stop_stroll",
             },
         )
 
@@ -89,14 +121,30 @@ class DimosIntegrationTests(unittest.TestCase):
         self.assertEqual(payload["status"], "error")
         self.assertEqual(payload["required_mode"], "go2")
 
+    def test_dry_run_return_to_start_reports_that_go2_mode_is_required(self) -> None:
+        result = self._adapter.call(
+            "tools/call",
+            {
+                "name": "return_to_start",
+                "arguments": {},
+            },
+        )
+        payload = json.loads(result["result"]["content"][0]["text"])
+        self.assertEqual(payload["status"], "error")
+        self.assertEqual(payload["required_mode"], "go2")
+
     def test_server_is_running_on_the_configured_remote_listener(self) -> None:
         self.assertEqual(self._global_config.listen_host, "0.0.0.0")
-        self.assertEqual(self._global_config.mcp_port, 9990)
+        self.assertEqual(self._global_config.mcp_port, self._test_port)
         result = self._adapter.call("tools/list")
         self.assertIn("tools", result["result"])
 
     def test_go2_blueprint_composes_the_official_navigation_stack_without_starting_it(self) -> None:
+        from dimos.agents.agent_spec import AgentSpec
+        from dimos.core.coordination.module_coordinator import _resolve_single_ref
+        from dimos.spec.utils import spec_structural_compliance
         from dimos_dog_mcp import blueprint as blueprint_module
+        from dimos_dog_mcp.agent_bridge import StandaloneAgentBridge
 
         if blueprint_module.unitree_go2_spatial is None:
             self.skipTest("requires dimos-dog-mcp[go2]")
@@ -112,6 +160,11 @@ class DimosIntegrationTests(unittest.TestCase):
                 os.environ["DIMOS_DOG_MCP_MODE"] = previous_mode
 
         module_names = {atom.module.__name__ for atom in blueprint.blueprints}
+        agent_spec_providers = {
+            atom.module.__name__
+            for atom in blueprint.active_blueprints
+            if spec_structural_compliance(atom.module, AgentSpec)
+        }
         self.assertTrue(
             {
                 "GO2Connection",
@@ -123,10 +176,35 @@ class DimosIntegrationTests(unittest.TestCase):
                 "MovementManager",
                 "SpatialMemory",
                 "NavigationSkillContainer",
+                "PersonFollowSkillContainer",
+                "UnitreeSkillContainer",
+                "PerceiveLoopSkill",
+                "HomeNavigationSkill",
+                "StrollSkill",
                 "DogMotionSkill",
                 "DogMcpServer",
             }
             <= module_names
+        )
+        self.assertNotIn("SpeakSkill", module_names)
+        self.assertEqual(agent_spec_providers, {"StandaloneAgentBridge"})
+        perceive_loop = next(
+            atom for atom in blueprint.active_blueprints if atom.module.__name__ == "PerceiveLoopSkill"
+        )
+        agent_ref = next(
+            module_ref
+            for module_ref in perceive_loop.module_refs
+            if module_ref.name == "_agent_spec"
+        )
+        self.assertIs(
+            _resolve_single_ref(
+                perceive_loop,
+                agent_ref,
+                agent_ref.spec,
+                blueprint,
+                set(),
+            ),
+            StandaloneAgentBridge,
         )
 
     def test_dry_run_does_not_start_motion(self) -> None:

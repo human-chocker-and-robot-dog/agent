@@ -12,17 +12,64 @@ NAVIGATION_TOOL_NAMES = frozenset(
     {
         "tag_location",
         "navigate_with_text",
+        "return_to_start",
         "stop_navigation",
         "begin_exploration",
         "end_exploration",
         "start_patrol",
         "stop_patrol",
+        "start_stroll",
+        "stop_stroll",
     }
 )
 
 
 class DryRunNavigationSkill(Module):
     """Expose the navigation contract without pretending to navigate in dry-run."""
+
+    @skill
+    def relative_move(
+        self,
+        forward: float = 0.0,
+        left: float = 0.0,
+        degrees: float = 0.0,
+    ) -> str:
+        """Report that relative navigation requires the live Go2 stack."""
+
+        return self._unavailable(
+            "relative_move",
+            {"forward": forward, "left": left, "degrees": degrees},
+        )
+
+    @skill
+    def wait(self, seconds: float) -> str:
+        """Report that the official robot wait tool requires Go2 mode."""
+
+        return self._unavailable("wait", {"seconds": seconds})
+
+    @skill
+    def current_time(self) -> str:
+        """Report that the official Go2 tool container is not active."""
+
+        return self._unavailable("current_time")
+
+    @skill
+    def execute_sport_command(self, command_name: str) -> str:
+        """Report that Unitree sport commands require a live Go2 connection."""
+
+        return self._unavailable("execute_sport_command", {"command_name": command_name})
+
+    @skill
+    def get_battery_soc(self) -> str:
+        """Report that battery telemetry requires a live Go2 connection."""
+
+        return self._unavailable("get_battery_soc")
+
+    @skill
+    def observe(self) -> str:
+        """Report that camera observation requires a live Go2 connection."""
+
+        return self._unavailable("observe")
 
     @skill
     def tag_location(self, location_name: str) -> str:
@@ -35,6 +82,12 @@ class DryRunNavigationSkill(Module):
         """Report that semantic navigation requires the live Go2 navigation stack."""
 
         return self._unavailable("navigate_with_text", {"query": query})
+
+    @skill
+    def return_to_start(self) -> str:
+        """Report that session-start navigation requires the live Go2 stack."""
+
+        return self._unavailable("return_to_start")
 
     @skill
     def stop_navigation(self) -> str:
@@ -65,6 +118,61 @@ class DryRunNavigationSkill(Module):
         """Report that no live patrol process is active in dry-run."""
 
         return self._unavailable("stop_patrol")
+
+    @skill
+    def start_stroll(self) -> str:
+        """Report that human-like strolling requires the live Go2 stack."""
+
+        return self._unavailable("start_stroll")
+
+    @skill
+    def stop_stroll(self) -> str:
+        """Report that no live stroll is active in dry-run."""
+
+        return self._unavailable("stop_stroll")
+
+    @skill
+    def look_out_for(
+        self,
+        description_of_things: list[str],
+        then: dict[str, object] | None = None,
+    ) -> str:
+        """Report that continuous visual perception requires the live Go2 stack."""
+
+        return self._unavailable(
+            "look_out_for",
+            {"description_of_things": description_of_things, "then": then},
+        )
+
+    @skill
+    def stop_looking_out(self) -> str:
+        """Report that no live visual lookout is active in dry-run."""
+
+        return self._unavailable("stop_looking_out")
+
+    @skill
+    def follow_person(
+        self,
+        query: str,
+        initial_bbox: list[float] | None = None,
+        initial_image: str | None = None,
+    ) -> str:
+        """Report that person following requires the live Go2 stack."""
+
+        return self._unavailable(
+            "follow_person",
+            {
+                "query": query,
+                "initial_bbox": initial_bbox,
+                "initial_image": initial_image,
+            },
+        )
+
+    @skill
+    def stop_following(self) -> str:
+        """Report that no live person-following process is active in dry-run."""
+
+        return self._unavailable("stop_following")
 
     @staticmethod
     def _unavailable(tool_name: str, arguments: dict[str, object] | None = None) -> str:

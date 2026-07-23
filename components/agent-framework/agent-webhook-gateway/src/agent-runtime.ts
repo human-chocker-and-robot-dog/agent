@@ -27,14 +27,29 @@ export function buildAgentSystemPrompt(defaultSpeedMps: number): string {
 导航规则：
 - 用户指定具名地点或自然语言目的地时，可调用 navigate_with_text；不得把它改写成定时直行。
 - tag_location 只用于把机器狗当前地图位置保存为名称。
-- “探索未知区域”使用 begin_exploration；“在已知区域持续巡逻”使用 start_patrol，不得混为一谈。
-- 停止定点导航、探索和巡逻分别使用 stop_navigation、end_exploration、stop_patrol。
-- 导航、探索和巡逻只在下层 Go2 模式可用；下层返回 dry-run 或错误时，必须如实告诉用户没有启动真实导航。
+- “回到起点”或“返回启动位置”使用 return_to_start；它返回本次下层进程捕获的第一帧有效里程计位置，不依赖手工打点。
+- “探索未知区域并尽量覆盖”使用 begin_exploration；“在已建图区域来回巡视”使用 start_patrol；“像人散步一样随机选一条未知分支并放弃其他分支”使用 start_stroll，三者不得混为一谈。
+- 停止定点导航、探索、巡逻和散步分别使用 stop_navigation、end_exploration、stop_patrol、stop_stroll。
+- 导航、探索、巡逻、散步、视觉、跟随和设备控制只在下层 Go2 模式可用；下层返回 dry-run 或错误时，必须如实告诉用户没有启动真实能力。
 
 规范化后精确等于“停”或“stop”的输入会在进入你之前由输入网关处理。其他文本都作为普通用户请求处理。`;
 }
 
 export function createDogTools(mcp: McpToolCaller) {
+	const noArguments = Type.Object({}, { additionalProperties: false });
+	const noArgumentTool = (name: string, label: string, description: string, promptSnippet: string) =>
+		defineTool({
+			name,
+			label,
+			description,
+			promptSnippet,
+			parameters: noArguments,
+			executionMode: "sequential",
+			execute: async (_toolCallId, _params, signal) => ({
+				content: [{ type: "text", text: await mcp.callTool(name, {}, signal) }],
+				details: {},
+			}),
+		});
 	const motionParameters = Type.Object(
 		{
 			speed_mps: Type.Number({
@@ -119,6 +134,122 @@ export function createDogTools(mcp: McpToolCaller) {
 		}),
 	});
 
+	const serverStatus = noArgumentTool(
+		"server_status",
+		"Server Status",
+		"读取下层 DIMOS MCP 的进程、模块与工具状态。",
+		"读取下层 DIMOS MCP 状态",
+	);
+
+	const listModules = noArgumentTool(
+		"list_modules",
+		"List Modules",
+		"列出下层 DIMOS 当前部署的模块及其工具。",
+		"列出 DIMOS 模块",
+	);
+
+	const agentSend = defineTool({
+		name: "agent_send",
+		label: "Agent Send",
+		description: "向下层 DIMOS Agent 的活动输入传输发送消息。",
+		promptSnippet: "向下层 DIMOS Agent 发送消息",
+		parameters: Type.Object(
+			{ message: Type.String({ minLength: 1, description: "要发送给下层 Agent 的消息" }) },
+			{ additionalProperties: false },
+		),
+		executionMode: "sequential",
+		execute: async (_toolCallId, params, signal) => ({
+			content: [{ type: "text", text: await mcp.callTool("agent_send", { message: params.message }, signal) }],
+			details: {},
+		}),
+	});
+
+	const relativeMove = defineTool({
+		name: "relative_move",
+		label: "Relative Move",
+		description: "调用 DIMOS 官方相对位移，以当前位置为基准前后、左右移动并旋转。",
+		promptSnippet: "按相对坐标移动机器狗",
+		parameters: Type.Object(
+			{
+				forward: Type.Optional(Type.Number({ description: "前向位移，单位米，负数表示后退" })),
+				left: Type.Optional(Type.Number({ description: "左向位移，单位米，负数表示向右" })),
+				degrees: Type.Optional(Type.Number({ description: "最终相对旋转角度，单位度" })),
+			},
+			{ additionalProperties: false },
+		),
+		executionMode: "sequential",
+		execute: async (_toolCallId, params, signal) => ({
+			content: [
+				{
+					type: "text",
+					text: await mcp.callTool(
+						"relative_move",
+						{
+							forward: params.forward ?? 0,
+							left: params.left ?? 0,
+							degrees: params.degrees ?? 0,
+						},
+						signal,
+					),
+				},
+			],
+			details: {},
+		}),
+	});
+
+	const wait = defineTool({
+		name: "wait",
+		label: "Wait",
+		description: "调用 DIMOS 官方等待工具。",
+		promptSnippet: "等待指定秒数",
+		parameters: Type.Object(
+			{ seconds: Type.Number({ minimum: 0, description: "等待秒数" }) },
+			{ additionalProperties: false },
+		),
+		executionMode: "sequential",
+		execute: async (_toolCallId, params, signal) => ({
+			content: [{ type: "text", text: await mcp.callTool("wait", { seconds: params.seconds }, signal) }],
+			details: {},
+		}),
+	});
+
+	const currentTime = noArgumentTool(
+		"current_time",
+		"Current Time",
+		"读取下层 DIMOS 运行环境的当前时间。",
+		"读取机器端当前时间",
+	);
+
+	const executeSportCommand = defineTool({
+		name: "execute_sport_command",
+		label: "Execute Sport Command",
+		description: "执行 DIMOS 官方 Unitree 命名运动指令。",
+		promptSnippet: "执行 Unitree 命名运动指令",
+		parameters: Type.Object(
+			{ command_name: Type.String({ minLength: 1, description: "官方 Unitree 运动指令名称" }) },
+			{ additionalProperties: false },
+		),
+		executionMode: "sequential",
+		execute: async (_toolCallId, params, signal) => ({
+			content: [
+				{
+					type: "text",
+					text: await mcp.callTool("execute_sport_command", { command_name: params.command_name }, signal),
+				},
+			],
+			details: {},
+		}),
+	});
+
+	const getBatterySoc = noArgumentTool(
+		"get_battery_soc",
+		"Get Battery SOC",
+		"读取 Go2 官方电池剩余百分比。",
+		"读取机器狗电量",
+	);
+
+	const observe = noArgumentTool("observe", "Observe", "获取 Go2 官方当前相机观察结果。", "观察机器狗当前视野");
+
 	const tagLocation = defineTool({
 		name: "tag_location",
 		label: "Tag Location",
@@ -170,6 +301,13 @@ export function createDogTools(mcp: McpToolCaller) {
 			details: {},
 		}),
 	});
+
+	const returnToStart = noArgumentTool(
+		"return_to_start",
+		"Return To Start",
+		"返回本次下层进程启动后捕获的第一帧有效里程计位置；20 厘米内直接报告已在起点。",
+		"返回本次运行的启动位置",
+	);
 
 	const stopNavigation = defineTool({
 		name: "stop_navigation",
@@ -236,18 +374,132 @@ export function createDogTools(mcp: McpToolCaller) {
 		}),
 	});
 
+	const lookOutFor = defineTool({
+		name: "look_out_for",
+		label: "Look Out For",
+		description: "持续观察指定目标，发现后可触发另一个官方工具。",
+		promptSnippet: "持续寻找指定目标",
+		parameters: Type.Object(
+			{
+				description_of_things: Type.Array(Type.String({ minLength: 1 }), {
+					minItems: 1,
+					description: "要寻找的目标描述列表",
+				}),
+				// biome-ignore lint/suspicious/noThenProperty: DiMOS 0.0.14b1 defines this exact MCP argument name.
+				then: Type.Optional(Type.Record(Type.String(), Type.Unknown())),
+			},
+			{ additionalProperties: false },
+		),
+		executionMode: "sequential",
+		execute: async (_toolCallId, params, signal) => ({
+			content: [
+				{
+					type: "text",
+					text: await mcp.callTool(
+						"look_out_for",
+						{
+							description_of_things: params.description_of_things,
+							// biome-ignore lint/suspicious/noThenProperty: DiMOS 0.0.14b1 defines this exact MCP argument name.
+							then: params.then ?? null,
+						},
+						signal,
+					),
+				},
+			],
+			details: {},
+		}),
+	});
+
+	const stopLookingOut = noArgumentTool(
+		"stop_looking_out",
+		"Stop Looking Out",
+		"停止 DIMOS 持续视觉查找。",
+		"停止寻找目标",
+	);
+
+	const followPerson = defineTool({
+		name: "follow_person",
+		label: "Follow Person",
+		description: "使用 DIMOS 官方视觉跟踪持续跟随指定人员。",
+		promptSnippet: "跟随指定人员",
+		parameters: Type.Object(
+			{
+				query: Type.String({ minLength: 1, description: "要跟随人员的描述" }),
+				initial_bbox: Type.Optional(
+					Type.Array(Type.Number(), {
+						minItems: 4,
+						maxItems: 4,
+						description: "可选初始检测框 [x1, y1, x2, y2]",
+					}),
+				),
+				initial_image: Type.Optional(Type.String({ description: "可选 Base64 JPEG 初始帧" })),
+			},
+			{ additionalProperties: false },
+		),
+		executionMode: "sequential",
+		execute: async (_toolCallId, params, signal) => ({
+			content: [
+				{
+					type: "text",
+					text: await mcp.callTool(
+						"follow_person",
+						{
+							query: params.query,
+							initial_bbox: params.initial_bbox ?? null,
+							initial_image: params.initial_image ?? null,
+						},
+						signal,
+					),
+				},
+			],
+			details: {},
+		}),
+	});
+
+	const stopFollowing = noArgumentTool(
+		"stop_following",
+		"Stop Following",
+		"停止 DIMOS 官方人员跟随。",
+		"停止跟随人员",
+	);
+
+	const startStroll = noArgumentTool(
+		"start_stroll",
+		"Start Stroll",
+		"开始人类式散步：在局部未知分支中随机选一条并放弃其他分支，不追求地图覆盖率。",
+		"开始非穷举的人类式自主散步",
+	);
+
+	const stopStroll = noArgumentTool("stop_stroll", "Stop Stroll", "停止当前人类式自主散步。", "停止自主散步");
+
 	return [
 		moveForward,
 		moveBackward,
 		stopMotion,
 		motionStatus,
+		serverStatus,
+		listModules,
+		agentSend,
+		relativeMove,
+		wait,
+		currentTime,
+		executeSportCommand,
+		getBatterySoc,
+		observe,
 		tagLocation,
 		navigateWithText,
+		returnToStart,
 		stopNavigation,
 		beginExploration,
 		endExploration,
 		startPatrol,
 		stopPatrol,
+		lookOutFor,
+		stopLookingOut,
+		followPerson,
+		stopFollowing,
+		startStroll,
+		stopStroll,
 	] as const;
 }
 

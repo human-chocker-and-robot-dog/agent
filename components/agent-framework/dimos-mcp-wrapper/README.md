@@ -43,7 +43,7 @@ claude mcp add --transport http --scope project dimos-dog-wrapper http://127.0.0
 
 ## 工具
 
-包装器暴露与上游同名的 11 个工具，并将参数不变地转发：
+包装器暴露与上游同名的全部 27 个工具，并将参数不变地单次转发：
 
 | 工具 | 上游工具 | 说明 |
 | --- | --- | --- |
@@ -51,17 +51,14 @@ claude mcp add --transport http --scope project dimos-dog-wrapper http://127.0.0
 | `move_backward` | `move_backward` | 转发后退速度和持续时间。 |
 | `stop_motion` | `stop_motion` | 立即转发停止，不重试。 |
 | `motion_status` | `motion_status` | 转发上游本地运动状态。 |
-| `tag_location` | `tag_location` | 转发当前位置命名。 |
-| `navigate_with_text` | `navigate_with_text` | 转发自然语言目的地。 |
-| `stop_navigation` | `stop_navigation` | 取消定点导航。 |
-| `begin_exploration` | `begin_exploration` | 启动 Frontier 探索。 |
-| `end_exploration` | `end_exploration` | 停止 Frontier 探索。 |
-| `start_patrol` | `start_patrol` | 启动已知地图巡逻。 |
-| `stop_patrol` | `stop_patrol` | 停止巡逻。 |
+| 20 个 DiMOS 官方工具 | 同名官方工具 | 按 DiMOS `0.0.14b1` 官方签名转发除 `speak` 外的管理、移动、状态、导航、感知和跟随能力。 |
+| `return_to_start` | `return_to_start` | 转发返回本次下层进程启动位置的请求。 |
+| `start_stroll` | `start_stroll` | 启动随机选支、非覆盖式的人类式散步。 |
+| `stop_stroll` | `stop_stroll` | 停止散步。 |
 
-速度、持续时间、dry-run/Go2 模式、最终零速度停止和官方导航算法均由上游 `dimos-dog-mcp` 负责。包装器不连接硬件、不运行路径规划，也不伪造遥测。dry-run 导航错误会按普通上游错误触发 `after_error`。
+速度、持续时间、dry-run/Go2 模式、最终零速度停止、官方能力和散步算法均由上游 `dimos-dog-mcp` 负责。包装器不连接硬件、不运行路径规划，也不伪造遥测。dry-run 的硬件能力错误会按普通上游错误触发 `after_error`。
 
-包装器 endpoint 只公开上述 11 个转发工具；DIMOS 自带的 `server_status`、`list_modules` 和 `agent_send` 不对外暴露。
+包装器 endpoint 公开上述完整 27 工具。所有工具均通过同一个 `ForwardingService`，所以都支持同时配置四种 hook。
 
 ## 配置
 

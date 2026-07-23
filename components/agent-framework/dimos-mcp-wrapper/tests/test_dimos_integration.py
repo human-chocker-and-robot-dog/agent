@@ -24,8 +24,10 @@ class DimosWrapperIntegrationTests(unittest.TestCase):
         cls._global_config = global_config
         cls._previous_port = global_config.mcp_port
         cls._previous_env_port = os.environ.get("DIMOS_MCP_WRAPPER_PORT")
+        cls._previous_mcp_port_env = os.environ.get("MCP_PORT")
         cls._port = _unused_local_port()
         os.environ["DIMOS_MCP_WRAPPER_PORT"] = str(cls._port)
+        os.environ["MCP_PORT"] = str(cls._port)
         global_config.update(viewer="none", n_workers=1)
         cls._coordinator = ModuleCoordinator.build(build_blueprint())
         _wait_until_ready(cls._port)
@@ -39,8 +41,12 @@ class DimosWrapperIntegrationTests(unittest.TestCase):
             os.environ.pop("DIMOS_MCP_WRAPPER_PORT", None)
         else:
             os.environ["DIMOS_MCP_WRAPPER_PORT"] = cls._previous_env_port
+        if cls._previous_mcp_port_env is None:
+            os.environ.pop("MCP_PORT", None)
+        else:
+            os.environ["MCP_PORT"] = cls._previous_mcp_port_env
 
-    def test_native_mcp_discovers_the_forwarded_dog_and_navigation_tools(self) -> None:
+    def test_native_mcp_discovers_supported_pinned_official_and_custom_tools(self) -> None:
         result = _mcp_request(self._port, "tools/list")
         names = {tool["name"] for tool in result["result"]["tools"]}
 
@@ -51,13 +57,29 @@ class DimosWrapperIntegrationTests(unittest.TestCase):
                 "move_backward",
                 "stop_motion",
                 "motion_status",
+                "server_status",
+                "list_modules",
+                "agent_send",
+                "relative_move",
+                "wait",
+                "current_time",
+                "execute_sport_command",
+                "get_battery_soc",
+                "observe",
                 "tag_location",
                 "navigate_with_text",
+                "return_to_start",
                 "stop_navigation",
                 "begin_exploration",
                 "end_exploration",
                 "start_patrol",
                 "stop_patrol",
+                "look_out_for",
+                "stop_looking_out",
+                "follow_person",
+                "stop_following",
+                "start_stroll",
+                "stop_stroll",
             },
         )
 

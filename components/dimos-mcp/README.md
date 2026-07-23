@@ -1,6 +1,6 @@
 # 独立 DIMOS 机器狗 MCP
 
-`dimos-mcp` 是部署在机器狗侧主机上的独立底层 MCP。它不依赖 Agent Webhook Gateway 或 MCP 包装器运行。定时运动工具转换为 DIMOS `cmd_vel: Twist`；Go2 模式同时组合 DIMOS 官方空间地图、代价地图、重规划 A*、Frontier 探索和巡逻模块。
+`dimos-mcp` 是部署在机器狗侧主机上的独立底层 MCP。它不依赖 Agent Webhook Gateway 或 MCP 包装器运行。它公开 DiMOS `0.0.14b1` 中除 `speak` 外的 20 个官方工具，以及 7 个自研工具；Go2 模式组合官方空间、导航和机器人技能，但不运行模型、Agent 循环或云端 TTS。
 
 ```mermaid
 flowchart LR
@@ -13,7 +13,7 @@ flowchart LR
 
 ## 模块接口
 
-服务暴露以下机器狗工具：
+服务固定暴露 27 个工具。完整参数与语义表见根目录 `USAGE.md`：
 
 | 工具 | 参数 | 行为 |
 | --- | --- | --- |
@@ -21,17 +21,14 @@ flowchart LR
 | `move_backward` | `speed_mps`、`duration_s` | 按给定速度和时长后退；实机动作结束时发布零速度。 |
 | `stop_motion` | 无 | 取消本地运动并立即发布零速度。 |
 | `motion_status` | 无 | 返回本地命令执行状态，不是机器狗遥测。 |
-| `tag_location` | `location_name` | 将当前地图位置保存为具名地点。 |
-| `navigate_with_text` | `query` | 解析自然语言目的地并启动 DIMOS 官方导航。 |
-| `stop_navigation` | 无 | 取消当前定点导航目标。 |
-| `begin_exploration` | 无 | 启动 Wavefront Frontier 自主探索。 |
-| `end_exploration` | 无 | 停止自主探索。 |
-| `start_patrol` | 无 | 在已知地图内启动自主巡逻。 |
-| `stop_patrol` | 无 | 停止自主巡逻。 |
+| 20 个 DiMOS 官方工具 | 官方 `0.0.14b1` 签名 | 管理、相对移动、设备状态、导航、探索、巡逻、感知与跟随；不包含 `speak`。 |
+| `return_to_start` | 无 | 返回本次下层进程捕获的第一帧有效里程计位置。 |
+| `start_stroll` | 无 | 随机选择一个局部未知分支，退休其他分支并避免回头补覆盖。 |
+| `stop_stroll` | 无 | 停止人类式散步。 |
 
 速度和时长必须是正有限数值。当前不设置硬编码数值上限；dry-run 和 Go2 都使用同一运动状态机并拒绝重叠运动。可预期的参数或互斥错误返回 `{"status":"error","error":"..."}` 文本结果。MCP 请求返回只表示底层命令处理结果，不证明机器狗已经到达目标位置。
 
-7 个导航工具只有 Go2 模式会执行。dry-run 中它们仍可通过 `tools/list` 发现，但调用会返回包含 `required_mode: "go2"` 的错误，不会伪造地图或导航结果。定点导航、探索和巡逻应分别使用对应的停止工具；`stop_motion` 只终止本项目的定时速度动作。
+除三个官方 MCP 管理工具和四个本地定时运动工具外，其余能力只有 Go2 模式会真实执行。dry-run 中完整工具仍可通过 `tools/list` 发现，但调用会返回包含 `required_mode: "go2"` 的错误。`start_patrol` 是已建图覆盖巡逻；`start_stroll` 是面向未知道路的非覆盖式随机选支散步；`begin_exploration` 才是覆盖式 Frontier 探索。
 
 ## 运行要求
 
@@ -146,13 +143,22 @@ curl --request POST "http://192.168.66.160:9990/mcp" \
   --data '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}'
 ```
 
-返回的 `tools` 必须只包含：
+返回的 `tools` 必须精确包含：
 
 ```text
 move_forward
 move_backward
 stop_motion
 motion_status
+server_status
+list_modules
+agent_send
+relative_move
+wait
+current_time
+execute_sport_command
+get_battery_soc
+observe
 tag_location
 navigate_with_text
 stop_navigation
@@ -160,9 +166,16 @@ begin_exploration
 end_exploration
 start_patrol
 stop_patrol
+look_out_for
+stop_looking_out
+follow_person
+stop_following
+return_to_start
+start_stroll
+stop_stroll
 ```
 
-独立 Server 会隐藏 DIMOS 自带的 `server_status`、`list_modules` 和 `agent_send`，避免扩大无认证远程 endpoint 的能力范围。
+该清单是对锁定版本 DiMOS `0.0.14b1` 的版本化契约；升级 DiMOS 时必须重新审计官方工具。
 
 ### dry-run 前进调用
 
@@ -272,7 +285,11 @@ export DIMOS_DOG_MCP_PORT=9990
 dimos-dog-mcp
 ```
 
-Go2 模式复用 DIMOS 官方 `unitree_go2_spatial` Blueprint，并增加官方 `NavigationSkillContainer`。该 Blueprint 包含 Go2 连接、体素地图、代价地图、`ReplanningAStarPlanner`、`WavefrontFrontierExplorer`、`PatrollingModule` 和 `MovementManager`。定时速度动作正常到期、显式停止和模块关闭都会发布零速度。MCP 客户端断开不等同于取消；应根据当前任务调用 `stop_motion`、`stop_navigation`、`end_exploration` 或 `stop_patrol`。
+Go2 模式复用 DiMOS 官方 `unitree_go2_spatial` Blueprint，并组合官方导航、Unitree、感知和人员跟随技能。官方 `SpeakSkill` 不组合：它会在启动阶段初始化 OpenAI TTS，而本项目由上层回复接收端完成最终用户 TTS，因此底层启动不需要 `OPENAI_API_KEY`。自研 `StrollSkill` 复用官方 Frontier 检测与导航，只替换为随机选支、退休旁支、拒绝回头补覆盖的目标策略。
+
+官方 `PerceiveLoopSkill` 声明了必需的 `AgentSpec` 引用。独立底层不应为此引入官方 `McpClient`，因为它会额外创建模型和 Agent 循环。本组件改由无模型的 `StandaloneAgentBridge` 满足该引用：`look_out_for` 没有 `then` 时仍通过 MCP 工具流通知上层；设置 `then` 时，桥接器只向当前进程的本机 MCP endpoint 单次调用指定的公开工具。
+
+MCP 客户端断开不等同于取消；应根据当前任务调用对应的 `stop_*` 工具。
 
 非 Go2 设备应在底层包中替换或扩展 DIMOS 连接 module，使其消费同名、同类型的 `cmd_vel: Twist`，同时保留参数验证、运动互斥和零速度停止。
 

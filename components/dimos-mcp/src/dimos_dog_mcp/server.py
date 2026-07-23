@@ -7,17 +7,7 @@ from dimos.core.core import rpc
 from dimos.core.module import SkillInfo
 from dimos.core.rpc_client import RpcCall, RPCClient
 
-from .navigation import NAVIGATION_TOOL_NAMES
-
-
-PUBLIC_TOOL_NAMES = frozenset(
-    {
-        "move_forward",
-        "move_backward",
-        "stop_motion",
-        "motion_status",
-    }
-) | NAVIGATION_TOOL_NAMES
+from .tool_contract import OFFICIAL_MCP_SERVER_TOOL_NAMES, PUBLIC_TOOL_NAMES
 
 
 class DogMcpServer(McpServer):
@@ -25,9 +15,13 @@ class DogMcpServer(McpServer):
 
     @rpc
     def get_skills(self) -> list[SkillInfo]:
-        """Exclude this server module's own skills from MCP discovery and calls."""
+        """Expose the pinned official MCP management tools."""
 
-        return []
+        return [
+            skill_info
+            for skill_info in super().get_skills()
+            if skill_info.func_name in OFFICIAL_MCP_SERVER_TOOL_NAMES
+        ]
 
     @rpc
     def on_system_modules(self, modules: list[RPCClient]) -> None:

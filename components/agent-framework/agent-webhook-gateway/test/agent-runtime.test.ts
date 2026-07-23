@@ -14,7 +14,7 @@ describe("fixed Pi agent runtime", () => {
 		expect(prompt).toContain("方向默认为向前");
 	});
 
-	it("registers the motion and official navigation wrapper MCP tools", () => {
+	it("registers supported pinned official and custom wrapper MCP tools", () => {
 		const tools = createDogTools({
 			callTool: async () => "accepted",
 		});
@@ -24,13 +24,29 @@ describe("fixed Pi agent runtime", () => {
 			"move_backward",
 			"stop_motion",
 			"motion_status",
+			"server_status",
+			"list_modules",
+			"agent_send",
+			"relative_move",
+			"wait",
+			"current_time",
+			"execute_sport_command",
+			"get_battery_soc",
+			"observe",
 			"tag_location",
 			"navigate_with_text",
+			"return_to_start",
 			"stop_navigation",
 			"begin_exploration",
 			"end_exploration",
 			"start_patrol",
 			"stop_patrol",
+			"look_out_for",
+			"stop_looking_out",
+			"follow_person",
+			"stop_following",
+			"start_stroll",
+			"stop_stroll",
 		]);
 	});
 
@@ -50,13 +66,29 @@ describe("fixed Pi agent runtime", () => {
 				"move_backward",
 				"stop_motion",
 				"motion_status",
+				"server_status",
+				"list_modules",
+				"agent_send",
+				"relative_move",
+				"wait",
+				"current_time",
+				"execute_sport_command",
+				"get_battery_soc",
+				"observe",
 				"tag_location",
 				"navigate_with_text",
+				"return_to_start",
 				"stop_navigation",
 				"begin_exploration",
 				"end_exploration",
 				"start_patrol",
 				"stop_patrol",
+				"look_out_for",
+				"stop_looking_out",
+				"follow_person",
+				"stop_following",
+				"start_stroll",
+				"stop_stroll",
 			]);
 			session.dispose();
 		} finally {

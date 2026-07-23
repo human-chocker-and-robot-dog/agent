@@ -23,13 +23,29 @@ class DogMcpToolsTests(unittest.TestCase):
         self.assertEqual(tools.move_backward(0.08, 0.3), "move_backward")
         self.assertEqual(tools.stop_motion(), "stop_motion")
         self.assertEqual(tools.motion_status(), "motion_status")
+        self.assertEqual(tools.server_status(), "server_status")
+        self.assertEqual(tools.list_modules(), "list_modules")
+        self.assertEqual(tools.agent_send("继续"), "agent_send")
+        self.assertEqual(tools.relative_move(1.0, -0.5, 90.0), "relative_move")
+        self.assertEqual(tools.wait(2.0), "wait")
+        self.assertEqual(tools.current_time(), "current_time")
+        self.assertEqual(tools.execute_sport_command("Hello"), "execute_sport_command")
+        self.assertEqual(tools.get_battery_soc(), "get_battery_soc")
+        self.assertEqual(tools.observe(), "observe")
         self.assertEqual(tools.tag_location("门口"), "tag_location")
         self.assertEqual(tools.navigate_with_text("去门口"), "navigate_with_text")
+        self.assertEqual(tools.return_to_start(), "return_to_start")
         self.assertEqual(tools.stop_navigation(), "stop_navigation")
         self.assertEqual(tools.begin_exploration(), "begin_exploration")
         self.assertEqual(tools.end_exploration(), "end_exploration")
         self.assertEqual(tools.start_patrol(), "start_patrol")
         self.assertEqual(tools.stop_patrol(), "stop_patrol")
+        self.assertEqual(tools.look_out_for(["人"], None), "look_out_for")
+        self.assertEqual(tools.stop_looking_out(), "stop_looking_out")
+        self.assertEqual(tools.follow_person("穿蓝衣服的人", None, None), "follow_person")
+        self.assertEqual(tools.stop_following(), "stop_following")
+        self.assertEqual(tools.start_stroll(), "start_stroll")
+        self.assertEqual(tools.stop_stroll(), "stop_stroll")
 
         self.assertEqual(
             forwarder.calls,
@@ -38,12 +54,35 @@ class DogMcpToolsTests(unittest.TestCase):
                 ("move_backward", {"speed_mps": 0.08, "duration_s": 0.3}),
                 ("stop_motion", {}),
                 ("motion_status", {}),
+                ("server_status", {}),
+                ("list_modules", {}),
+                ("agent_send", {"message": "继续"}),
+                ("relative_move", {"forward": 1.0, "left": -0.5, "degrees": 90.0}),
+                ("wait", {"seconds": 2.0}),
+                ("current_time", {}),
+                ("execute_sport_command", {"command_name": "Hello"}),
+                ("get_battery_soc", {}),
+                ("observe", {}),
                 ("tag_location", {"location_name": "门口"}),
                 ("navigate_with_text", {"query": "去门口"}),
+                ("return_to_start", {}),
                 ("stop_navigation", {}),
                 ("begin_exploration", {}),
                 ("end_exploration", {}),
                 ("start_patrol", {}),
                 ("stop_patrol", {}),
+                ("look_out_for", {"description_of_things": ["人"], "then": None}),
+                ("stop_looking_out", {}),
+                (
+                    "follow_person",
+                    {
+                        "query": "穿蓝衣服的人",
+                        "initial_bbox": None,
+                        "initial_image": None,
+                    },
+                ),
+                ("stop_following", {}),
+                ("start_stroll", {}),
+                ("stop_stroll", {}),
             ],
         )

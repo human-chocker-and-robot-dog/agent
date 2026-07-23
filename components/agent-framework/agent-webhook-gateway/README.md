@@ -1,6 +1,6 @@
 # Agent Webhook Gateway
 
-该服务实现固定 Pi Agent 会话的持久化输入网关和输出投递器。输入端只提交用户文本；Agent 通过 `dimos-mcp-wrapper` 的 11 个 MCP 工具执行定时运动、具名地点导航、Frontier 探索和已知地图巡逻；回复接收端只收到完整的最终用户可见文本。
+该服务实现固定 Pi Agent 会话的持久化输入网关和输出投递器。输入端只提交用户文本；Agent 通过 `dimos-mcp-wrapper` 使用 DiMOS `0.0.14b1` 中除 `speak` 外的 20 个官方工具和 7 个自研工具；回复接收端只收到完整的最终用户可见文本，并可在上层进行 TTS。
 
 ```mermaid
 flowchart LR
@@ -63,8 +63,8 @@ POST http://127.0.0.1:8080/v1/instructions
 - 新事件和相同文本的幂等重投返回 `202`；同一 ID 对应不同文本返回 `409`。
 - 普通事件按 SQLite 受理顺序串行进入一个固定 Agent 会话。
 - “停”或 `stop` 的精确规范化匹配绕过 Agent，单次调用 `stop_motion`。
-- 具名目的地使用 `navigate_with_text`；未知区域探索和已知地图巡逻分别使用 `begin_exploration` 与 `start_patrol`。
-- `stop_motion` 只停止定时速度动作。定点导航、探索和巡逻由 Agent 分别调用 `stop_navigation`、`end_exploration`、`stop_patrol`；语音停止快速路径不会猜测当前后台任务类型。
+- 具名目的地使用 `navigate_with_text`；未知区域覆盖探索、已建图覆盖巡逻和非覆盖式人类散步分别使用 `begin_exploration`、`start_patrol`、`start_stroll`。
+- `stop_motion` 只停止定时速度动作。定点导航、探索、巡逻和散步由 Agent 分别调用 `stop_navigation`、`end_exploration`、`stop_patrol`、`stop_stroll`；语音停止快速路径不会猜测当前后台任务类型。
 - Agent 或停止调用失败时仍产生普通回复事件，文本固定为“暂时无法完成此请求，请稍后重试。”。
 - outbox 先持久化再回调。回调失败只重投同一 `reply_id`，不会重跑 Agent 或 MCP 工具。
 - 进程启动时若发现上次运行中断在 `processing` 状态，会生成固定失败回复而不重跑该事件，避免重复机器狗副作用。
