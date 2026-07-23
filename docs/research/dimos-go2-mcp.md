@@ -18,11 +18,11 @@
 
 ## MVP 设计
 
-新增 `integrations/dimos-dog-mcp`，而不修改 DIMOS 或 Pi 核心：
+实现最初位于 `integrations/dimos-dog-mcp`，现已抽离为根目录独立包 `dimos-mcp`，不修改 DIMOS 或 Pi 核心：
 
 1. `DogMotionSkill` 使用 `@skill` 暴露 `move_forward`、`move_backward`、`stop_motion`、`motion_status`。
 2. 技能将速度转成标准 DIMOS `Twist`，并发布到 `cmd_vel`。
-3. 默认 `dry-run` 接入内部 sink，不连接任何真实硬件；基础依赖仅安装 DIMOS `base` extra，显式 `DIMOS_DOG_MCP_MODE=go2` 和 `go2` 可选依赖才会惰性导入官方 `GO2Connection`。
+3. 默认 `dry-run` 接入内部 sink，不连接任何真实硬件；基础依赖安装 DIMOS `web` extra，并直接固定 DIMOS 生成 skill schema 时实际使用的 `langchain-core`。显式 `DIMOS_DOG_MCP_MODE=go2` 和 `go2` 可选依赖才会启用官方 `GO2Connection`。
 4. 初版曾把运动命令限制为 `0.01–0.20 m/s` 和 `0.1–2.0 s`；当前项目决策已移除这些硬编码范围，只要求速度与时长为正的有限数值。运行期间仍按 10 Hz 发布，正常结束、显式停止和模块关闭均发送零速度。
 5. 前进与后退立即启动后台定时运动；本地状态机拒绝重叠动作，停止工具可抢占当前动作，因此不依赖 DIMOS RPC 是否并行调度。
 

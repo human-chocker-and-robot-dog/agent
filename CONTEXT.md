@@ -16,7 +16,7 @@
 
 | 名称 | 位置 | 职责 |
 | --- | --- | --- |
-| 上游机器狗 MCP | `integrations/dimos-dog-mcp` | DIMOS 原生 MCP 服务，暴露 `move_forward`、`move_backward`、`stop_motion`、`motion_status`，并通过 `cmd_vel: Twist` 连接 dry-run 或 Unitree Go2。 |
+| 独立底层机器狗 MCP | `dimos-mcp` | 部署在机器狗侧主机的独立 DIMOS MCP，暴露 `move_forward`、`move_backward`、`stop_motion`、`motion_status`，并通过 `cmd_vel: Twist` 连接 dry-run 或 Unitree Go2。 |
 | MCP 薄包装器 | `integrations/dimos-mcp-wrapper` | 独立 DIMOS MCP 服务，转发同名工具到上游 MCP，并发出生命周期 hook。 |
 | 上游 MCP | 默认 `http://127.0.0.1:9990/mcp` | 真正执行机器狗命令的服务。 |
 | 包装器 MCP | 默认 `http://127.0.0.1:9991/mcp` | MCP Host 应连接的服务。 |
@@ -34,7 +34,7 @@ flowchart LR
     I[输入端] --> G[Agent Webhook Gateway :8080]
     G --> A[固定 Pi Agent 会话]
     A --> B[DIMOS MCP wrapper :9991]
-    B -->|one tools/call| C[dog MCP :9990]
+    B -->|trusted network, one tools/call| C[standalone dog MCP :9990]
     C --> D[DIMOS cmd_vel]
     D --> E[dry-run or Go2]
     B -. non-blocking lifecycle events .-> F[hook adapters]
@@ -45,7 +45,7 @@ flowchart LR
 
 1. 机器狗动作的参数验证、并发控制、零速度结束和 dry-run/Go2 选择属于上游机器狗 MCP；包装器不得复制或绕过这些逻辑。
 2. 每个包装器工具调用最多向上游发送一次 `tools/call` 请求。不得自动重试运动命令。
-3. 包装器必须原样转发已公开工具的名称和参数，并返回上游的文本结果或清晰的上游错误。
+3. 包装器必须原样转发已公开工具的名称和参数，并返回上游的文本结果或清晰的上游错误。底层预期错误使用 `{"status":"error","error":"..."}` 文本 envelope；包装器和 Agent 网关还必须识别 DIMOS 将异常包装成的 `Error running tool '...'` 文本，不能把它当作成功。
 4. `stop_motion` 优先于 hook：请求必须立刻转发，hook 不能让它等待、重试或被吞掉。
 5. hook 事件为 `before_call`、`after_success`、`after_error`、`finally`。事件按 FIFO 入队，但 hook 不在 MCP 调用路径上执行，因此 `before_call` 不是前置拦截器。
 6. hook 失败只能记录日志，不能改变上游请求、返回值或错误。hook 的投递是最佳努力，不保证在包装器进程退出时完成。
@@ -68,8 +68,9 @@ flowchart LR
 ## 运行约束
 
 - DIMOS `0.0.14b1` 要求 Python 3.10 至 3.12；本开发机的 Python 3.14 只能运行不依赖 DIMOS 的纯单元测试。
-- 默认 MCP 只安装 `dimos[web]`，即 MCP Server 所需的 FastAPI/Uvicorn 运行时；不得额外启用会引入 Agent、感知和可视化功能集合的 `dimos[base]` 聚合 extra。
+- 默认 MCP 安装 `dimos[web]==0.0.14b1` 以及 DIMOS 技能 schema 生成实际需要的 `langchain-core==1.5.0`；不得额外启用会引入完整 Agent、感知和可视化功能集合的 `dimos[base]` 聚合 extra。
 - 上游机器狗 MCP 默认 dry-run。实机 Go2 操作仍需显式设置上游的 `DIMOS_DOG_MCP_MODE=go2`，并满足场地隔离、独立急停和官方网络预检。
+- 独立底层 MCP 默认只监听 `127.0.0.1:9990`。跨机器调用时必须显式设置 `DIMOS_DOG_MCP_HOST=0.0.0.0` 或指定 interface 地址，并通过受信任网络和主机防火墙限制访问。
 - 包装器默认请求超时为 10 秒，配置通过 `DIMOS_MCP_WRAPPER_*` 环境变量提供。它不直接打开硬件连接。
 - Agent Webhook Gateway 要求 Node.js 22.19 或更高版本，使用 Node 原生 SQLite 持久化 inbox/outbox，并读取既有 Pi Agent 模型与认证配置。
 

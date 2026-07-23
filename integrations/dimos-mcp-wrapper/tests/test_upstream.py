@@ -95,3 +95,45 @@ class HttpMcpToolClientTests(unittest.TestCase):
             server.shutdown()
             server.server_close()
             thread.join(timeout=1.0)
+
+    def test_tool_call_rejects_structured_dog_tool_error(self) -> None:
+        client = HttpMcpToolClient(
+            "http://127.0.0.1:9990/mcp",
+            timeout_s=1.0,
+            post_json=lambda _url, _body, _timeout: {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "result": {
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": '{"status":"error","error":"movement is busy"}',
+                        }
+                    ]
+                },
+            },
+        )
+
+        with self.assertRaisesRegex(UpstreamMcpError, "movement is busy"):
+            client.call_tool("move_forward", {"speed_mps": 0.1, "duration_s": 1.0})
+
+    def test_tool_call_rejects_dimos_wrapped_exception(self) -> None:
+        client = HttpMcpToolClient(
+            "http://127.0.0.1:9990/mcp",
+            timeout_s=1.0,
+            post_json=lambda _url, _body, _timeout: {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "result": {
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": "Error running tool 'stop_motion': transport failed",
+                        }
+                    ]
+                },
+            },
+        )
+
+        with self.assertRaisesRegex(UpstreamMcpError, "transport failed"):
+            client.call_tool("stop_motion", {})

@@ -78,7 +78,9 @@ class HttpMcpToolClient:
         result = response.get("result")
         if not isinstance(result, Mapping):
             raise UpstreamMcpError("upstream MCP response did not contain an object result")
-        return _result_text(result)
+        result_text = _result_text(result)
+        _raise_for_tool_error(result_text)
+        return result_text
 
     def _next_request_id(self) -> int:
         with self._request_id_lock:
@@ -124,3 +126,19 @@ def _result_text(result: Mapping[str, object]) -> str:
         if text_parts:
             return "\n".join(text_parts)
     return json.dumps(dict(result), ensure_ascii=False, separators=(",", ":"))
+
+
+def _raise_for_tool_error(result_text: str) -> None:
+    """Recognize DIMOS and dog-tool application errors hidden in text content."""
+
+    if result_text.startswith("Error running tool '"):
+        raise UpstreamMcpError(result_text)
+    try:
+        payload: object = json.loads(result_text)
+    except json.JSONDecodeError:
+        return
+    if not isinstance(payload, dict) or payload.get("status") != "error":
+        return
+    message = payload.get("error")
+    detail = message if isinstance(message, str) else "upstream dog tool failed"
+    raise UpstreamMcpError(detail)

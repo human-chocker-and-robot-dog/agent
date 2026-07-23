@@ -6,6 +6,7 @@ from collections.abc import Iterable
 
 from dimos.agents.mcp.mcp_server import McpServer
 from dimos.core.coordination.blueprints import autoconnect
+from dimos.core.coordination.module_coordinator import ModuleCoordinator
 from dimos.core.global_config import global_config
 
 from .config import read_wrapper_config
@@ -31,7 +32,7 @@ def build_blueprint(*, hooks: Iterable[McpCallHook] = ()):
 def main() -> None:
     """Run the DIMOS wrapper until the process is stopped."""
 
-    build_blueprint().build().loop()
+    ModuleCoordinator.build(build_blueprint()).loop()
 
 
 if __name__ == "__main__":

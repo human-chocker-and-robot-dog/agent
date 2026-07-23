@@ -1,6 +1,6 @@
 # DIMOS MCP 薄包装器
 
-该组件本身是一个 DIMOS 原生 MCP 服务。它不控制机器狗，也不复制运动逻辑；它把机器狗 MCP 工具调用转发给已运行的 `dimos-dog-mcp`，并在转发路径上发出不会阻塞调用的生命周期 hook。
+该组件本身是一个 DIMOS 原生 MCP 服务。它不控制机器狗，也不复制运动逻辑；它把机器狗 MCP 工具调用转发给已运行的根目录独立 `dimos-mcp`，并在转发路径上发出不会阻塞调用的生命周期 hook。
 
 ```mermaid
 flowchart LR
@@ -12,12 +12,12 @@ flowchart LR
 
 ## 安装与启动
 
-DIMOS `0.0.14b1` 要求 Python 3.10 至 3.12。先在同一台主机启动上游机器狗 MCP：
+DIMOS `0.0.14b1` 要求 Python 3.10 至 3.12。底层机器应按根目录 `dimos-mcp/README.md` 独立启动机器狗 MCP。若同机部署：
 
 ```bash
 uv venv --python 3.12
 source .venv/bin/activate
-uv pip install -e /absolute/path/to/pi-hackason/integrations/dimos-dog-mcp
+uv pip install -e /absolute/path/to/pi-hackason/dimos-mcp
 dimos-dog-mcp
 ```
 
@@ -25,6 +25,13 @@ dimos-dog-mcp
 
 ```bash
 uv pip install -e /absolute/path/to/pi-hackason/integrations/dimos-mcp-wrapper
+dimos-mcp-wrapper
+```
+
+若包装器运行在另一台上层机器：
+
+```bash
+export DIMOS_MCP_WRAPPER_UPSTREAM_URL=http://192.168.66.160:9990/mcp
 dimos-mcp-wrapper
 ```
 
@@ -57,6 +64,8 @@ claude mcp add --transport http --scope project dimos-dog-wrapper http://127.0.0
 
 上游请求采用一条标准 JSON-RPC `tools/call` HTTP POST。网络失败、HTTP 失败或 MCP 错误会返回给调用方；包装器不会自动重试运动类命令。
 
+底层参数或互斥错误使用 `{"status":"error","error":"..."}` 文本 envelope。包装器还识别 DIMOS 原生 Server 将意外异常包装成的 `Error running tool '...'` 文本；两类结果都会抛出上游错误并触发 `after_error`，不会触发 `after_success`。
+
 ## Hook
 
 `ForwardingService` 通过一个专用 daemon worker 以 FIFO 顺序投递下列事件：
@@ -81,7 +90,9 @@ class AuditHook:
             print(event.call.tool_name)
 
 
-build_blueprint(hooks=(AuditHook(),)).build().loop()
+from dimos.core.coordination.module_coordinator import ModuleCoordinator
+
+ModuleCoordinator.build(build_blueprint(hooks=(AuditHook(),))).loop()
 ```
 
 当前不提供猜测性的 `send_instruction` 工具。未来确定指令协议后，应实现一个具体 hook 或独立适配器，并继续保持“上游调用一次、hook 最佳努力、停止优先”的约束。

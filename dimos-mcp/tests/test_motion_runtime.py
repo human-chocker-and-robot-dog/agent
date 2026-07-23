@@ -3,7 +3,12 @@ from __future__ import annotations
 import threading
 import unittest
 
-from dimos_dog_mcp.config import RuntimeMode, read_runtime_mode
+from dimos_dog_mcp.config import (
+    McpServerConfig,
+    RuntimeMode,
+    read_mcp_server_config,
+    read_runtime_mode,
+)
 from dimos_dog_mcp.motion_runtime import (
     MotionBusyError,
     MotionRuntime,
@@ -105,3 +110,30 @@ class MotionRuntimeTests(unittest.TestCase):
         self.assertIs(read_runtime_mode({"DIMOS_DOG_MCP_MODE": "go2"}), RuntimeMode.GO2)
         with self.assertRaises(ValueError):
             read_runtime_mode({"DIMOS_DOG_MCP_MODE": "live"})
+
+    def test_mcp_listener_defaults_to_loopback_and_supports_remote_binding(self) -> None:
+        self.assertEqual(
+            read_mcp_server_config({}),
+            McpServerConfig(host="127.0.0.1", port=9990),
+        )
+        self.assertEqual(
+            read_mcp_server_config(
+                {
+                    "DIMOS_DOG_MCP_HOST": "0.0.0.0",
+                    "DIMOS_DOG_MCP_PORT": "10090",
+                }
+            ),
+            McpServerConfig(host="0.0.0.0", port=10090),
+        )
+
+    def test_mcp_listener_rejects_invalid_host_or_port(self) -> None:
+        invalid_environments = (
+            {"DIMOS_DOG_MCP_HOST": " "},
+            {"DIMOS_DOG_MCP_PORT": "0"},
+            {"DIMOS_DOG_MCP_PORT": "65536"},
+            {"DIMOS_DOG_MCP_PORT": "not-a-port"},
+        )
+        for environment in invalid_environments:
+            with self.subTest(environment=environment):
+                with self.assertRaises(ValueError):
+                    read_mcp_server_config(environment)

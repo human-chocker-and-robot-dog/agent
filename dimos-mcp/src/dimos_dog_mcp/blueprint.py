@@ -1,0 +1,54 @@
+"""Entry point that composes the motion skills with DIMOS's native MCP server."""
+
+from __future__ import annotations
+
+from dimos.core.coordination.blueprints import autoconnect
+from dimos.core.coordination.module_coordinator import ModuleCoordinator
+from dimos.core.global_config import global_config
+
+from .config import McpServerConfig, RuntimeMode, read_mcp_server_config, read_runtime_mode
+from .dry_run import DryRunTwistSink
+from .module import DogMotionSkill
+from .server import DogMcpServer
+
+try:
+    from dimos.robot.unitree.go2.connection import GO2Connection
+except ModuleNotFoundError:
+    GO2Connection = None
+
+
+def build_blueprint():
+    """Build an MCP blueprint using dry-run unless Go2 mode is explicitly selected."""
+
+    if read_runtime_mode() is RuntimeMode.GO2:
+        if GO2Connection is None:
+            raise RuntimeError(
+                "Go2 mode requires the optional dependency; install dimos-dog-mcp[go2]"
+            )
+        base = GO2Connection.blueprint()
+    else:
+        base = DryRunTwistSink.blueprint()
+    return autoconnect(
+        base,
+        DogMotionSkill.blueprint(),
+        DogMcpServer.blueprint(),
+    )
+
+
+def configure_mcp_listener(config: McpServerConfig) -> None:
+    """Apply the standalone listener configuration to DIMOS."""
+
+    global_config.update(listen_host=config.host, mcp_port=config.port)
+
+
+def main() -> None:
+    """Run the DIMOS module coordinator until the process is stopped."""
+
+    server_config = read_mcp_server_config()
+    configure_mcp_listener(server_config)
+    print(f"DIMOS dog MCP listening on {server_config.host}:{server_config.port}/mcp")
+    ModuleCoordinator.build(build_blueprint()).loop()
+
+
+if __name__ == "__main__":
+    main()

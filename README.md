@@ -32,6 +32,14 @@ To learn more about Pi:
 | **[@earendil-works/pi-coding-agent](packages/coding-agent)** | Interactive coding agent CLI |
 | **[@earendil-works/pi-tui](packages/tui)** | Terminal UI library with differential rendering |
 
+## Robot Integration Modules
+
+| Module | Description |
+| --- | --- |
+| **[dimos-mcp](dimos-mcp)** | Standalone DIMOS machine-side HTTP MCP for dry-run or Unitree Go2 motion. It can be copied and deployed without the Agent gateway or wrapper. |
+| **[dimos-mcp-wrapper](integrations/dimos-mcp-wrapper)** | Upper-machine forwarding MCP with non-blocking lifecycle hooks. |
+| **[agent-webhook-gateway](integrations/agent-webhook-gateway)** | Persistent user-text inbox and final-reply outbox for one Pi Agent session. |
+
 For Slack/chat automation and workflows see [earendil-works/pi-chat](https://github.com/earendil-works/pi-chat).
 
 ## Permissions & Containerization

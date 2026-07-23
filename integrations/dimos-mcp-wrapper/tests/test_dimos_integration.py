@@ -13,7 +13,7 @@ from urllib.request import Request, urlopen
 HAS_SUPPORTED_DIMOS = importlib.util.find_spec("dimos") is not None and sys.version_info < (3, 13)
 
 
-@unittest.skipUnless(HAS_SUPPORTED_DIMOS, "requires DIMOS on Python 3.10–3.12")
+@unittest.skipUnless(HAS_SUPPORTED_DIMOS, "requires DIMOS on Python 3.10-3.12")
 class DimosWrapperIntegrationTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -21,6 +21,7 @@ class DimosWrapperIntegrationTests(unittest.TestCase):
         from dimos.core.global_config import global_config
         from dimos_mcp_wrapper.blueprint import build_blueprint
 
+        cls._global_config = global_config
         cls._previous_port = global_config.mcp_port
         cls._previous_env_port = os.environ.get("DIMOS_MCP_WRAPPER_PORT")
         cls._port = _unused_local_port()
@@ -32,9 +33,8 @@ class DimosWrapperIntegrationTests(unittest.TestCase):
     @classmethod
     def tearDownClass(cls) -> None:
         cls._coordinator.stop()
-        from dimos.core.global_config import global_config
 
-        global_config.update(mcp_port=cls._previous_port)
+        cls._global_config.update(mcp_port=cls._previous_port)
         if cls._previous_env_port is None:
             os.environ.pop("DIMOS_MCP_WRAPPER_PORT", None)
         else:

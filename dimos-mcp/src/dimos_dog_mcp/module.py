@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-from typing import Any
 
 from dimos.agents.annotation import skill
 from dimos.core.core import rpc
@@ -16,6 +15,7 @@ from .config import RuntimeMode, read_runtime_mode
 from .motion_runtime import (
     DEFAULT_DURATION_S,
     DEFAULT_SPEED_MPS,
+    MotionBusyError,
     MotionRuntime,
     VelocityCommand,
     validate_motion_request,
@@ -30,7 +30,7 @@ class DogMotionSkill(Module):
     _mode: RuntimeMode
     _runtime: MotionRuntime
 
-    def __init__(self, **kwargs: Any) -> None:
+    def __init__(self, **kwargs: object) -> None:
         super().__init__(**kwargs)
         self._mode = read_runtime_mode()
         self._runtime = MotionRuntime(self._publish_velocity)
@@ -104,37 +104,42 @@ class DogMotionSkill(Module):
         )
 
     def _move(self, direction: str, sign: float, speed_mps: object, duration_s: object) -> str:
-        speed, duration = validate_motion_request(speed_mps, duration_s)
-        command = VelocityCommand(
-            linear_x=sign * speed,
-            linear_y=0.0,
-            angular_z=0.0,
-            duration_s=duration,
-        )
-
-        if self._mode is RuntimeMode.DRY_RUN:
+        try:
+            speed, duration = validate_motion_request(speed_mps, duration_s)
+            command = VelocityCommand(
+                linear_x=sign * speed,
+                linear_y=0.0,
+                angular_z=0.0,
+                duration_s=duration,
+            )
+            self._runtime.start(command)
+        except (MotionBusyError, ValueError) as error:
             return json.dumps(
                 {
-                    "status": "dry_run",
-                    "direction": direction,
-                    "linear_x_mps": command.linear_x,
-                    "duration_s": command.duration_s,
-                    "message": "No hardware connection was started and no non-zero cmd_vel was published.",
+                    "status": "error",
+                    "error": str(error),
                 }
             )
 
-        self._runtime.start(command)
+        if self._mode is RuntimeMode.DRY_RUN:
+            status = "dry_run"
+            message = "No hardware connection was started and no non-zero cmd_vel was published."
+        else:
+            status = "started"
+            message = "Call stop_motion to stop before the requested duration expires."
         return json.dumps(
             {
-                "status": "started",
+                "status": status,
                 "direction": direction,
                 "linear_x_mps": command.linear_x,
                 "duration_s": command.duration_s,
-                "message": "Call stop_motion to stop before the requested duration expires.",
+                "message": message,
             }
         )
 
     def _publish_velocity(self, command: VelocityCommand) -> None:
+        if self._mode is RuntimeMode.DRY_RUN and command != VelocityCommand.zero():
+            return
         self.cmd_vel.publish(
             Twist(
                 Vector3(command.linear_x, command.linear_y, 0.0),

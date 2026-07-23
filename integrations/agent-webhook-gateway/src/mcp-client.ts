@@ -62,6 +62,10 @@ export class HttpMcpToolClient implements McpToolCaller {
 		if (payload.result.isError === true) {
 			throw new Error(resultText || "MCP wrapper reported a tool execution error");
 		}
+		const toolError = readToolError(resultText);
+		if (toolError) {
+			throw new Error(toolError);
+		}
 		return resultText || JSON.stringify(payload.result);
 	}
 }
@@ -81,4 +85,19 @@ function readResultText(result: JsonObject): string {
 		}
 	}
 	return "";
+}
+
+function readToolError(resultText: string): string | undefined {
+	if (resultText.startsWith("Error running tool '")) {
+		return resultText;
+	}
+	try {
+		const payload: unknown = JSON.parse(resultText);
+		if (isObject(payload) && payload.status === "error") {
+			return typeof payload.error === "string" ? payload.error : "MCP wrapper reported a tool execution error";
+		}
+	} catch {
+		return undefined;
+	}
+	return undefined;
 }
