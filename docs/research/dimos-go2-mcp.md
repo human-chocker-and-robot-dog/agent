@@ -14,7 +14,7 @@
 - [`@skill` 实现](https://github.com/dimensionalOS/dimos/blob/main/dimos/agents/annotation.py) 支持 `uses` capability。`movement` capability 用于排斥并发运动工具。
 - [Go2 连接模块](https://github.com/dimensionalOS/dimos/blob/main/dimos/robot/unitree/go2/connection.py) 定义 `cmd_vel: In[Twist]`，并将输入转发给机器狗连接；该模块也是官方机器人蓝图使用的稳定接入点。
 - [Go2 原生适配器](https://github.com/dimensionalOS/dimos/blob/main/dimos/hardware/drive_trains/unitree_go2/adapter.py) 的高层接口以 `write_velocities([vx, vy, wz])` 执行速度命令、以 `write_stop()` 执行立即停止。
-- [速度任务](https://github.com/dimensionalOS/dimos/blob/main/dimos/control/tasks/velocity_task/velocity_task.py) 的默认超时为 0.2 秒并可在超时发送零速度，印证了“速度命令必须有死手/零速度边界”的设计方向。
+- [速度任务](https://github.com/dimensionalOS/dimos/blob/main/dimos/control/tasks/velocity_task/velocity_task.py) 的默认超时为 0.2 秒并可在超时发送零速度，说明 DIMOS 提供了死手式速度控制选项；本项目当前不把该超时转化为用户参数范围。
 
 ## MVP 设计
 
@@ -23,11 +23,11 @@
 1. `DogMotionSkill` 使用 `@skill` 暴露 `move_forward`、`move_backward`、`stop_motion`、`motion_status`。
 2. 技能将速度转成标准 DIMOS `Twist`，并发布到 `cmd_vel`。
 3. 默认 `dry-run` 接入内部 sink，不连接任何真实硬件；基础依赖仅安装 DIMOS `base` extra，显式 `DIMOS_DOG_MCP_MODE=go2` 和 `go2` 可选依赖才会惰性导入官方 `GO2Connection`。
-4. 运动命令限制为 `0.01–0.20 m/s` 和 `0.1–2.0 s`，运行期间按 10 Hz 发布，正常结束、显式停止和模块关闭均发送零速度。
-5. 前进与后退立即启动后台短时运动；本地状态机拒绝重叠动作，停止工具可抢占当前动作，因此不依赖 DIMOS RPC 是否并行调度。
+4. 初版曾把运动命令限制为 `0.01–0.20 m/s` 和 `0.1–2.0 s`；当前项目决策已移除这些硬编码范围，只要求速度与时长为正的有限数值。运行期间仍按 10 Hz 发布，正常结束、显式停止和模块关闭均发送零速度。
+5. 前进与后退立即启动后台定时运动；本地状态机拒绝重叠动作，停止工具可抢占当前动作，因此不依赖 DIMOS RPC 是否并行调度。
 
 ## 已知边界
 
 - 当前实机实现只装配 DIMOS 官方文档中的 Unitree Go2 连接。其他机器狗必须提供一个消费 `cmd_vel: Twist` 的 DIMOS 模块后再接入。
 - `motion_status` 仅是 MCP 扩展的本地命令状态，不能替代机器狗遥测、急停或碰撞检测。
-- DIMOS 当前 MCP 服务对客户端断连不等同于运动取消；MVP 用 2 秒最大持续时间限制风险，实机操作必须保留独立急停并在需要时调用 `stop_motion`。
+- DIMOS 当前 MCP 服务对客户端断连不等同于运动取消。初版用 2 秒最大持续时间限制风险；该限制现已按“完全信任用户指令”的项目决策移除，需要提前停止时调用 `stop_motion`。

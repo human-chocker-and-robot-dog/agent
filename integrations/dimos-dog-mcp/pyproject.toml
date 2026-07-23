@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "dimos-dog-mcp"
 version = "0.1.0"
-description = "Safety-bounded DIMOS MCP skills for basic quadruped motion"
+description = "DIMOS MCP skills for user-directed quadruped motion"
 requires-python = ">=3.10,<3.13"
 dependencies = ["dimos[web]==0.0.14b1"]
 

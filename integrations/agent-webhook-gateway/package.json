@@ -1,0 +1,27 @@
+{
+	"name": "agent-webhook-gateway",
+	"version": "0.1.0",
+	"private": true,
+	"type": "module",
+	"description": "Persistent webhook inbox and outbox for a fixed Pi agent session",
+	"bin": {
+		"agent-webhook-gateway": "./dist/cli.js"
+	},
+	"scripts": {
+		"check": "tsc --noEmit -p tsconfig.json",
+		"build": "tsc -p tsconfig.build.json",
+		"test": "node node_modules/vitest/dist/cli.js --run test"
+	},
+	"dependencies": {
+		"@earendil-works/pi-coding-agent": "0.81.1",
+		"typebox": "1.1.38"
+	},
+	"devDependencies": {
+		"@types/node": "24.12.4",
+		"typescript": "5.9.3",
+		"vitest": "4.1.9"
+	},
+	"engines": {
+		"node": ">=22.19.0"
+	}
+}

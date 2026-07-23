@@ -78,14 +78,27 @@ class MotionRuntimeTests(unittest.TestCase):
         thread.join(timeout=1.0)
         self.assertFalse(thread.is_alive())
 
-    def test_motion_limits_reject_unsafe_values(self) -> None:
+    def test_motion_parameters_accept_trusted_positive_values_without_range_caps(self) -> None:
         self.assertEqual(validate_motion_request(0.1, 1.0), (0.1, 1.0))
-        with self.assertRaises(ValueError):
-            validate_motion_request(0.0, 1.0)
-        with self.assertRaises(ValueError):
-            validate_motion_request(0.21, 1.0)
-        with self.assertRaises(ValueError):
-            validate_motion_request(0.1, 2.1)
+        self.assertEqual(validate_motion_request(0.001, 0.01), (0.001, 0.01))
+        self.assertEqual(validate_motion_request(0.21, 2.1), (0.21, 2.1))
+        self.assertEqual(validate_motion_request(5.0, 60.0), (5.0, 60.0))
+
+    def test_motion_parameters_reject_non_positive_or_non_finite_values(self) -> None:
+        invalid_requests = (
+            (0.0, 1.0),
+            (-0.1, 1.0),
+            (0.1, 0.0),
+            (0.1, -1.0),
+            (float("nan"), 1.0),
+            (0.1, float("inf")),
+            (True, 1.0),
+        )
+
+        for speed_mps, duration_s in invalid_requests:
+            with self.subTest(speed_mps=speed_mps, duration_s=duration_s):
+                with self.assertRaises(ValueError):
+                    validate_motion_request(speed_mps, duration_s)
 
     def test_default_mode_is_dry_run_and_invalid_mode_fails(self) -> None:
         self.assertIs(read_runtime_mode({}), RuntimeMode.DRY_RUN)

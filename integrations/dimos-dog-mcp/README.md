@@ -42,12 +42,12 @@ claude mcp add --transport http --scope project dimos-dog http://localhost:9990/
 
 | 工具 | 参数 | 行为 |
 | --- | --- | --- |
-| `move_forward` | `speed_mps`、`duration_s` | 启动短时前进，到期后发送零速度 |
-| `move_backward` | `speed_mps`、`duration_s` | 启动短时后退，到期后发送零速度 |
+| `move_forward` | `speed_mps`、`duration_s` | 按给定速度和时长前进，到期后发送零速度 |
+| `move_backward` | `speed_mps`、`duration_s` | 按给定速度和时长后退，到期后发送零速度 |
 | `stop_motion` | 无 | 取消本地运动并立即发布零速度 |
 | `motion_status` | 无 | 返回本地命令状态，不是机器狗遥测 |
 
-速度范围固定为 `0.01–0.20 m/s`，持续时间固定为 `0.1–2.0 s`；默认值是 `0.10 m/s`、`1.0 s`。前进/后退调用会立即返回“已启动”，运动状态机在后台以 10 Hz 发布命令并拒绝重叠动作；`stop_motion` 会抢占当前动作。
+速度和持续时间接受用户提供的任意正有限数值，不设置硬编码范围上限或下限；省略参数时的默认值仍是 `0.10 m/s`、`1.0 s`。前进/后退调用会立即返回“已启动”，运动状态机在后台以 10 Hz 发布命令并拒绝重叠动作；`stop_motion` 会抢占当前动作。
 
 ## 启用真实 Go2
 
@@ -60,7 +60,7 @@ uv pip install -e '/absolute/path/to/pi-hackason/integrations/dimos-dog-mcp[go2]
 dimos-dog-mcp
 ```
 
-真实模式复用 DIMOS 官方 `GO2Connection`，其通过 WebRTC 与 Unitree Go2 通信。每个成功、停止或模块关闭的运动路径都会发布零 `cmd_vel`。MCP 客户端断开并不等同于 DIMOS 的运动取消，因此本 MVP 以 2 秒硬上限作为故障边界；需要提前停止时必须调用 `stop_motion`。
+真实模式复用 DIMOS 官方 `GO2Connection`，其通过 WebRTC 与 Unitree Go2 通信。每个正常到期、显式停止或模块关闭的运动路径都会发布零 `cmd_vel`。MCP 客户端断开并不等同于 DIMOS 的运动取消；本项目完全信任用户提供的正速度和正时长，不再设置故障边界上限。需要提前停止时必须调用 `stop_motion`。
 
 对于非 Go2 机器狗，不要设置 `DIMOS_DOG_MCP_MODE=go2`。可以在 `blueprint.py` 中把 `GO2Connection.blueprint()` 换成该设备的 DIMOS 模块，只要它消费同名、同类型的 `cmd_vel: Twist` 输入流。
 

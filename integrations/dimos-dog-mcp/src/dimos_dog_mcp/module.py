@@ -1,4 +1,4 @@
-"""DIMOS skills that implement bounded forward, backward, and stop commands."""
+"""DIMOS skills that implement timed forward, backward, and stop commands."""
 
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ from .motion_runtime import (
 
 
 class DogMotionSkill(Module):
-    """Expose short, bounded ``cmd_vel`` motions through the native DIMOS MCP server."""
+    """Expose timed ``cmd_vel`` motions through the native DIMOS MCP server."""
 
     cmd_vel: Out[Twist]
 
@@ -50,11 +50,11 @@ class DogMotionSkill(Module):
         speed_mps: float = DEFAULT_SPEED_MPS,
         duration_s: float = DEFAULT_DURATION_S,
     ) -> str:
-        """Move forward briefly at a bounded speed, then send a zero-velocity stop.
+        """Move forward at the requested speed and duration, then send a zero-velocity stop.
 
         Args:
-            speed_mps: Forward speed in m/s. Allowed range: 0.01 to 0.20.
-            duration_s: Motion duration in seconds. Allowed range: 0.1 to 2.0.
+            speed_mps: Positive finite forward speed in m/s.
+            duration_s: Positive finite motion duration in seconds.
         """
 
         return self._move("forward", 1.0, speed_mps, duration_s)
@@ -65,11 +65,11 @@ class DogMotionSkill(Module):
         speed_mps: float = DEFAULT_SPEED_MPS,
         duration_s: float = DEFAULT_DURATION_S,
     ) -> str:
-        """Move backward briefly at a bounded speed, then send a zero-velocity stop.
+        """Move backward at the requested speed and duration, then send a zero-velocity stop.
 
         Args:
-            speed_mps: Reverse speed magnitude in m/s. Allowed range: 0.01 to 0.20.
-            duration_s: Motion duration in seconds. Allowed range: 0.1 to 2.0.
+            speed_mps: Positive finite reverse speed magnitude in m/s.
+            duration_s: Positive finite motion duration in seconds.
         """
 
         return self._move("backward", -1.0, speed_mps, duration_s)
@@ -130,7 +130,7 @@ class DogMotionSkill(Module):
                 "direction": direction,
                 "linear_x_mps": command.linear_x,
                 "duration_s": command.duration_s,
-                "message": "Call stop_motion to stop before the bounded duration expires.",
+                "message": "Call stop_motion to stop before the requested duration expires.",
             }
         )
 

@@ -4,21 +4,26 @@
 
 开始使用前，先阅读根目录的 [CONTEXT.md](CONTEXT.md)。它定义了安全边界和不可违反的架构约束；本文件定义安装、接入和开发流程。
 
+输入端系统向 Agent 输入用户文本、并由回复接收端接收最终回复时，遵循 [Agent 输入与最终回复 Webhook 对接指南](docs/agent-input-webhook-integration.md)。输入端负责确认每个 Webhook 都是完整真实请求；本框架不处理麦克风或语音识别。`integrations/agent-webhook-gateway` 已实现持久化输入网关、固定 Pi Agent 会话和输出投递器：Agent 无法完成时返回固定的用户可见文本，便于回复接收端直接显示或 TTS 朗读；运动参数不明确时 Agent 会追问而不执行；用户可使用“速度加时长”“距离加时长”或仅说距离，方向可选且默认向前，其中距离仅按部署标定速度进行估算；规范化后精确等于“停”或 `stop` 的语音停止口令会绕过 Agent 直接触发 `stop_motion`，被 MCP 接受后返回“已发送停止指令。”，但不替代物理急停。不要把 MCP 端点当作文本输入端点。
+
 ## 架构与职责
 
 ~~~mermaid
 flowchart LR
-    H["上层 MCP Host / Agent"] -->|HTTP MCP :9991/mcp| W["dimos-mcp-wrapper"]
+    I["输入端"] -->|HTTP Webhook :8080| A["固定 Pi Agent"]
+    A -->|HTTP MCP :9991/mcp| W["dimos-mcp-wrapper"]
     W -->|一次 tools/call| D["dimos-dog-mcp :9990/mcp"]
     D -->|DIMOS cmd_vel: Twist| C{"下层连接"}
     C -->|默认| R["dry-run"]
     C -->|显式启用| G["Unitree Go2"]
     W -. 生命周期事件 .-> K["可选 hook"]
+    A -->|最终回复 Webhook| O["回复接收端"]
 ~~~
 
 | 层级 | 组件 | 使用者应负责的事项 |
 | --- | --- | --- |
 | 上层 | MCP Host / Agent | 只连接包装器 MCP，并调用公开工具。 |
+| Agent Webhook 层 | `integrations/agent-webhook-gateway` | 持久化用户文本、串行运行固定 Agent 会话并投递最终回复。 |
 | 转发层 | `integrations/dimos-mcp-wrapper` | 原样、单次转发工具调用；可发出非阻塞 hook 事件。 |
 | 下层 | `integrations/dimos-dog-mcp` | 校验运动参数、串行化动作、发布零速度结束命令，并选择 dry-run 或 Go2。 |
 | 硬件层 | DIMOS 连接模块 | 消费 `cmd_vel: Twist`；当前支持 dry-run 和显式启用的 Go2。 |
@@ -72,12 +77,12 @@ dimos-dog-mcp
 
 | 工具 | 参数 | 行为 |
 | --- | --- | --- |
-| `move_forward` | `speed_mps`、`duration_s` | 短时前进，结束时发布零速度。 |
-| `move_backward` | `speed_mps`、`duration_s` | 短时后退，结束时发布零速度。 |
+| `move_forward` | `speed_mps`、`duration_s` | 按给定时长前进，结束时发布零速度。 |
+| `move_backward` | `speed_mps`、`duration_s` | 按给定时长后退，结束时发布零速度。 |
 | `stop_motion` | 无 | 取消当前本地运动并立即发布零速度。 |
 | `motion_status` | 无 | 返回本地命令执行状态，不是机器狗遥测。 |
 
-运动速度必须在 0.01 至 0.20 m/s 之间，持续时间必须在 0.1 至 2.0 秒之间。默认值分别为 0.10 m/s 和 1.0 秒；重叠的运动请求会被拒绝。
+运动速度和持续时间接受用户提供的任意正有限数值，不设置硬编码范围上限或下限。默认值分别为 0.10 m/s 和 1.0 秒；重叠的运动请求仍会被拒绝。
 
 ### 3. 启用真实 Unitree Go2（可选）
 
@@ -146,10 +151,42 @@ claude mcp add --transport http --scope project dimos-dog-wrapper http://127.0.0
 
 建议的上层使用顺序：
 
-1. 首次接入时保持下层 dry-run，先调用 `motion_status`，再发起短时、低速的前进或后退请求。
+1. 首次接入时保持下层 dry-run，先调用 `motion_status`，再按预期参数发起前进或后退请求。
 2. 需要提前结束动作时，调用 `stop_motion`；不要依赖断开 MCP 客户端连接来停止机器狗。
 3. 实机环境中不要并发发起运动工具调用。收到“动作正在进行”的错误后，先调用 `stop_motion` 或等待当前动作结束。
 4. `motion_status` 只描述本地命令执行器，不可当作定位、电量、姿态或碰撞传感器数据。
+
+## 接入 Agent 输入与最终回复 Webhook
+
+该服务需要 Node.js 22.19 或更高版本，并使用 Pi 已配置的模型和认证。先启动机器狗 MCP 与包装器，再安装并构建网关：
+
+~~~powershell
+Set-Location "C:/absolute/path/to/pi-hackason/integrations/agent-webhook-gateway"
+npm ci --ignore-scripts
+npm run build
+$env:AGENT_WEBHOOK_REPLY_URL = "http://reply-receiver:9080/agent-replies"
+node dist/cli.js
+~~~
+
+输入端向以下端点提交契约中的 `instruction_id` 和 `text`：
+
+~~~text
+POST http://网关主机:8080/v1/instructions
+~~~
+
+网关使用 SQLite 持久化 inbox/outbox，默认文件为当前目录下的 `data/agent-webhook.sqlite`；固定 Agent 会话默认持久化到 `data/agent-session`。相同 ID、相同文本的重投返回 `202` 且不会重复运行 Agent；同一 ID 对应不同文本返回 `409`。回复回调失败只重投同一 outbox 事件，不会重新运行 Agent 或 MCP 工具。进程恢复时，已进入处理但没有终态 outbox 的事件会得到固定失败回复，不会被重新执行。
+
+| 环境变量 | 默认值 | 说明 |
+| --- | --- | --- |
+| `AGENT_WEBHOOK_REPLY_URL` | 无 | 回复接收端部署级 HTTP(S) URL，必填。 |
+| `AGENT_WEBHOOK_HOST` / `AGENT_WEBHOOK_PORT` | `127.0.0.1` / `8080` | 输入网关监听地址。 |
+| `AGENT_WEBHOOK_DATABASE_PATH` | `<cwd>/data/agent-webhook.sqlite` | inbox/outbox SQLite 文件。 |
+| `AGENT_WEBHOOK_MCP_URL` | `http://127.0.0.1:9991/mcp` | 包装器 MCP URL。 |
+| `AGENT_WEBHOOK_AGENT_DIR` | `~/.pi/agent` | Pi 模型、认证和设置目录。 |
+| `AGENT_WEBHOOK_SESSION_DIR` | `<cwd>/data/agent-session` | 固定 Agent 会话目录。 |
+| `AGENT_WEBHOOK_DEFAULT_SPEED_MPS` | `0.1` | 仅距离请求的部署标定速度。 |
+
+其余超时和回复重投配置见 `integrations/agent-webhook-gateway/README.md`。HTTP 请求与回复 schema、停止口令规范化规则及下层开发者验收清单见 [Webhook 对接指南](docs/agent-input-webhook-integration.md)。
 
 ## 使用生命周期 hook
 
@@ -261,6 +298,7 @@ python -m unittest discover -s tests -v
 - 上下层端点、安装/启动步骤和环境变量；
 - hook 生命周期与扩展方式；
 - 下层硬件适配方式；
+- 外部指令事件和 Agent 回复事件的 Webhook 契约；
 - 测试或运行前置条件。
 
 若变更同时影响术语、架构边界或安全不变量，还必须同步更新 `CONTEXT.md`。

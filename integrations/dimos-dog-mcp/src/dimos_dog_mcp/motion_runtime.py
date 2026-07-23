@@ -1,4 +1,4 @@
-"""Thread-safe, bounded velocity execution independent of DIMOS imports."""
+"""Thread-safe, timed velocity execution independent of DIMOS imports."""
 
 from __future__ import annotations
 
@@ -12,10 +12,6 @@ from typing import Literal
 
 DEFAULT_SPEED_MPS = 0.1
 DEFAULT_DURATION_S = 1.0
-MIN_SPEED_MPS = 0.01
-MAX_SPEED_MPS = 0.2
-MIN_DURATION_S = 0.1
-MAX_DURATION_S = 2.0
 
 
 @dataclass(frozen=True)
@@ -36,7 +32,7 @@ class VelocityCommand:
 
 @dataclass(frozen=True)
 class MotionOutcome:
-    """The terminal state of a bounded velocity command."""
+    """The terminal state of a timed velocity command."""
 
     state: Literal["completed", "stopped"]
     elapsed_s: float
@@ -68,10 +64,10 @@ def validate_motion_request(speed_mps: object, duration_s: object) -> tuple[floa
 
     speed = _read_finite_number(speed_mps, "speed_mps")
     duration = _read_finite_number(duration_s, "duration_s")
-    if not MIN_SPEED_MPS <= speed <= MAX_SPEED_MPS:
-        raise ValueError(f"speed_mps must be in [{MIN_SPEED_MPS}, {MAX_SPEED_MPS}], got {speed}")
-    if not MIN_DURATION_S <= duration <= MAX_DURATION_S:
-        raise ValueError(f"duration_s must be in [{MIN_DURATION_S}, {MAX_DURATION_S}], got {duration}")
+    if speed <= 0:
+        raise ValueError(f"speed_mps must be positive, got {speed}")
+    if duration <= 0:
+        raise ValueError(f"duration_s must be positive, got {duration}")
     return speed, duration
 
 
@@ -96,13 +92,13 @@ class MotionRuntime:
         self._active: _ActiveMotion | None = None
 
     def execute(self, command: VelocityCommand) -> MotionOutcome:
-        """Publish one bounded command until completion or an explicit stop."""
+        """Publish one timed command until completion or an explicit stop."""
 
         active = self._begin(command)
         return self._run(active)
 
     def start(self, command: VelocityCommand) -> None:
-        """Start a bounded command on a daemon thread and return immediately."""
+        """Start a timed command on a daemon thread and return immediately."""
 
         active = self._begin(command)
         thread = threading.Thread(
