@@ -28,6 +28,8 @@ flowchart LR
 ## 前置条件与安全要求
 
 - 使用 Python 3.10 至 3.12；推荐 Python 3.12。DIMOS 0.0.14b1 不支持 Python 3.13 及以上。
+- 默认 MCP 安装精确版本的 `dimos[web]`。该 extra 提供 DIMOS MCP Server 所需的 FastAPI/Uvicorn，而不会额外启用包含 Agent、感知和可视化功能集合的 `dimos[base]` 聚合 extra。
+- 真实 Go2 仍使用显式的 `dimos[unitree]` 可选依赖。DIMOS 上游将它建立在更大的 base 依赖集合上，因此只在实机部署确有需要时安装。
 - 默认运行模式是 dry-run：不会连接、站立或移动真实机器狗。
 - 启用真实 Go2 前，必须完成场地隔离、独立急停、低延迟网络和厂商/DIMOS 网络预检。
 - 当前 MCP 服务没有内建访问控制。不要把 `:9990/mcp` 或 `:9991/mcp` 暴露到不受信任网络；跨主机部署时应由可信网络和外部访问控制保护。

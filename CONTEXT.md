@@ -44,6 +44,7 @@ flowchart LR
 ## 运行约束
 
 - DIMOS `0.0.14b1` 要求 Python 3.10 至 3.12；本开发机的 Python 3.14 只能运行不依赖 DIMOS 的纯单元测试。
+- 默认 MCP 只安装 `dimos[web]`，即 MCP Server 所需的 FastAPI/Uvicorn 运行时；不得额外启用会引入 Agent、感知和可视化功能集合的 `dimos[base]` 聚合 extra。
 - 上游机器狗 MCP 默认 dry-run。实机 Go2 操作仍需显式设置上游的 `DIMOS_DOG_MCP_MODE=go2`，并满足场地隔离、独立急停和官方网络预检。
 - 包装器默认请求超时为 10 秒，配置通过 `DIMOS_MCP_WRAPPER_*` 环境变量提供。它不直接打开硬件连接。
 
