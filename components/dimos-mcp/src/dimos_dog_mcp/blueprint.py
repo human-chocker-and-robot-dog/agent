@@ -9,6 +9,7 @@ from dimos.core.global_config import global_config
 from .agent_bridge import StandaloneAgentBridge
 from .config import McpServerConfig, RuntimeMode, read_mcp_server_config, read_runtime_mode
 from .dry_run import DryRunTwistSink
+from .go2_locomotion import enable_go2_locomotion
 from .home import HomeNavigationSkill
 from .module import DogMotionSkill
 from .navigation import DryRunNavigationSkill
@@ -78,13 +79,32 @@ def configure_mcp_listener(config: McpServerConfig) -> None:
     global_config.update(listen_host=config.host, mcp_port=config.port)
 
 
+def initialize_go2_runtime(coordinator: ModuleCoordinator) -> None:
+    """Enable Go2 joystick input after all official modules have started."""
+
+    if GO2Connection is None:
+        raise RuntimeError("Go2 runtime is unavailable; install dimos-dog-mcp[go2]")
+    connection = coordinator.get_instance(GO2Connection)
+    if connection is None:
+        raise RuntimeError("Go2 runtime did not deploy GO2Connection")
+    enable_go2_locomotion(connection)
+
+
 def main() -> None:
     """Run the DIMOS module coordinator until the process is stopped."""
 
     server_config = read_mcp_server_config()
+    runtime_mode = read_runtime_mode()
     configure_mcp_listener(server_config)
+    coordinator = ModuleCoordinator.build(build_blueprint())
+    if runtime_mode is RuntimeMode.GO2:
+        try:
+            initialize_go2_runtime(coordinator)
+        except Exception:
+            coordinator.stop()
+            raise
     print(f"DIMOS dog MCP listening on {server_config.host}:{server_config.port}/mcp")
-    ModuleCoordinator.build(build_blueprint()).loop()
+    coordinator.loop()
 
 
 if __name__ == "__main__":

@@ -37,6 +37,7 @@ Agent Webhook Gateway 不应直接连接底层机器狗 MCP，否则会绕过包
 - 真实 Go2 仍使用显式的 `dimos[unitree]` 可选依赖。DIMOS 上游将它建立在更大的 base 依赖集合上，因此只在实机部署确有需要时安装。
 - 默认运行模式是 dry-run：不会连接、站立或移动真实机器狗。
 - 启用真实 Go2 前，必须完成场地隔离、独立急停、低延迟网络和厂商/DIMOS 网络预检。
+- Go2 模式会在官方连接、站立与平衡初始化完成后显式启用固件 joystick 输入。锁定版 DiMOS wheel 未公开 `switch_joystick` RPC，因此入口通过现有 `GO2Connection.publish_request` 向 Sport endpoint 发送 API `1027` / `data=true`。响应状态码不为 `0`、结构无效或调用抛出异常时，下层进程停止全部模块并启动失败；dry-run 不执行该调用。
 - 当前 MCP 服务没有内建访问控制。不要把 `:9990/mcp` 或 `:9991/mcp` 暴露到不受信任网络；跨主机部署时应由可信网络和外部访问控制保护。
 
 ## 接入下层机器狗
@@ -140,7 +141,7 @@ uv pip install -e "$repositoryPath/components/dimos-mcp[go2]"
 dimos-dog-mcp
 ~~~
 
-Go2 模式组合 DiMOS 官方 `unitree_go2_spatial` Blueprint、`NavigationSkillContainer`、`PersonFollowSkillContainer` 和 `UnitreeSkillContainer`，其中包括 `GO2Connection`、感知、体素地图、代价地图、`ReplanningAStarPlanner`、`WavefrontFrontierExplorer`、`PatrollingModule` 与 `MovementManager`；本项目额外组合 `DogMotionSkill`、`HomeNavigationSkill`、`StrollSkill` 和无模型的 `StandaloneAgentBridge`。官方 `SpeakSkill` 被明确排除，因为它在启动阶段初始化 OpenAI TTS，而最终用户语音由上层回复接收端处理。桥接器只满足官方 `PerceiveLoopSkill` 的回调依赖：视觉命中的可选 `then` 会向当前进程的 `127.0.0.1:<DIMOS_DOG_MCP_PORT>/mcp` 发送一次公开工具调用。它不会创建模型、会话或第二个 Agent 循环。不要将任何其他设备伪装为 Go2。
+Go2 模式组合 DiMOS 官方 `unitree_go2_spatial` Blueprint、`NavigationSkillContainer`、`PersonFollowSkillContainer` 和 `UnitreeSkillContainer`，其中包括 `GO2Connection`、感知、体素地图、代价地图、`ReplanningAStarPlanner`、`WavefrontFrontierExplorer`、`PatrollingModule` 与 `MovementManager`；本项目额外组合 `DogMotionSkill`、`HomeNavigationSkill`、`StrollSkill` 和无模型的 `StandaloneAgentBridge`。`ModuleCoordinator.build()` 返回并证明官方模块已经完成启动后，入口会同步通过 `GO2Connection.publish_request` 向 `rt/api/sport/request` 发送 `{\"api_id\":1027,\"parameter\":{\"data\":true}}`，从而启用默认 `WIRELESS_CONTROLLER` 路径实际消费导航和定时运动产生的 `cmd_vel`。响应状态码不为 `0`、结构无效或调用抛出异常时，入口停止 coordinator 并让进程失败退出；只有成功后才打印 MCP listening 消息并进入主循环。该成功响应不是独立的底盘运动证明，仍须用 `/cmd_vel` 与 `/odom` 联动完成真机验收。官方 `SpeakSkill` 被明确排除，因为它在启动阶段初始化 OpenAI TTS，而最终用户语音由上层回复接收端处理。桥接器只满足官方 `PerceiveLoopSkill` 的回调依赖：视觉命中的可选 `then` 会向当前进程的 `127.0.0.1:<DIMOS_DOG_MCP_PORT>/mcp` 发送一次公开工具调用。它不会创建模型、会话或第二个 Agent 循环。不要将任何其他设备伪装为 Go2。
 
 若要接入非 Go2 设备，应在下层扩展中组合该设备对应的 DIMOS 连接模块，并让它消费同名、同类型的 `cmd_vel: Twist` 输入。仍须保留下层的参数校验、动作串行化和零速度停止机制；不要将这些安全逻辑移动到包装器。
 
@@ -351,6 +352,7 @@ ModuleCoordinator.build(build_blueprint(hooks=(AuditHook(), MetricsHook()))).loo
 | 目的 | 位置 |
 | --- | --- |
 | 下层 DIMOS MCP 组合 | `components/dimos-mcp/src/dimos_dog_mcp/blueprint.py` |
+| Go2 固件运动输入握手 | `components/dimos-mcp/src/dimos_dog_mcp/go2_locomotion.py` |
 | 下层网络与运行模式配置 | `components/dimos-mcp/src/dimos_dog_mcp/config.py` |
 | 下层运动状态机与安全边界 | `components/dimos-mcp/src/dimos_dog_mcp/motion_runtime.py` |
 | 下层公开导航契约与 dry-run 行为 | `components/dimos-mcp/src/dimos_dog_mcp/navigation.py` |
@@ -396,7 +398,8 @@ npm run demo:dry-run
 | --- | --- |
 | 上层看不到工具 | 确认连接的是包装器 `:9991/mcp`，且包装器使用兼容 Python 正常启动。 |
 | 包装器报告上游不可用 | 确认下层 `dimos-dog-mcp` 已启动，并检查 `DIMOS_MCP_WRAPPER_UPSTREAM_URL`。 |
-| 调用成功但机器狗不动 | 默认是 dry-run；确认是否经过安全预检后显式设置了 `DIMOS_DOG_MCP_MODE=go2`。 |
+| 调用成功但机器狗不动 | 先确认不是 dry-run，并确认当前进程启动日志位于显式 joystick 握手上线之后；再同时观察 `/nav_cmd_vel`、`/cmd_vel` 和 `/odom`，区分规划输出、速度转发与底盘反馈。 |
+| 启动报错 `connection rejected joystick input enablement` | `SwitchJoystick` Sport 请求返回了非零状态码或无效响应；检查机器狗连接、当前运动模式和是否存在其他控制进程。进程已停止全部 DIMOS 模块，不能把该次启动视为可用。 |
 | 官方硬件工具或散步工具返回 `required_mode=go2` | 当前下层是 dry-run；完成实机预检并安装 `[go2]` extra 后显式启用 Go2 模式。 |
 | 启动报错 `PerceiveLoopSkill ... AgentSpec ... No module met that spec` | 当前部署缺少 `StandaloneAgentBridge`，通常是底层包未更新或仍在运行旧的 editable-install 源码；更新 `components/dimos-mcp` 后重新安装并启动。不要通过加入官方 `McpClient` 修复，否则会在底层额外运行 LLM Agent。 |
 | 想用 hook 拦截危险动作 | 当前 hook 不是拦截器。应在下层实现明确、可测试的安全策略。 |

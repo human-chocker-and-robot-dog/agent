@@ -19,7 +19,7 @@
 | 名称 | 位置 | 职责 |
 | --- | --- | --- |
 | 机器人组件目录 | `components/` | 组合仓库中两个可独立部署组件的唯一根目录。 |
-| 独立底层机器狗 MCP | `components/dimos-mcp` | 部署在机器狗侧主机的独立 DIMOS MCP，公开锁定版 DiMOS `0.0.14b1` 中除 `speak` 外的 20 个官方工具，以及 7 个自研工具；Go2 模式组合官方空间、导航与机器人技能，但不嵌入模型、Agent 循环或云端 TTS。 |
+| 独立底层机器狗 MCP | `components/dimos-mcp` | 部署在机器狗侧主机的独立 DIMOS MCP，公开锁定版 DiMOS `0.0.14b1` 中除 `speak` 外的 20 个官方工具，以及 7 个自研工具；Go2 模式组合官方空间、导航与机器人技能，并在官方模块全部启动后显式启用固件 joystick 输入，但不嵌入模型、Agent 循环或云端 TTS。 |
 | Agent Framework | `components/agent-framework` | 部署在上层机器，组合固定 Pi Agent 会话、MCP 包装器、输入网关与回复投递器。 |
 | MCP 薄包装器 | `components/agent-framework/dimos-mcp-wrapper` | 独立 DIMOS MCP 服务，转发同名工具到上游 MCP，并发出生命周期 hook。 |
 | 上游 MCP | 默认 `http://127.0.0.1:9990/mcp` | 真正执行机器狗命令的服务。 |
@@ -73,12 +73,14 @@ flowchart LR
 24. 定点导航、返航、Frontier 覆盖探索、已建图巡逻和人类式散步是不同生命周期。`return_to_start` 使用下层进程启动后捕获的第一帧有效里程计作为会话起点，距离起点不超过 0.20 米时不得向规划器提交目标；提前终止返航或定点导航均调用 `stop_navigation`，探索、巡逻和散步分别调用 `end_exploration`、`stop_patrol` 或 `stop_stroll`。`stop_motion` 只停止本项目的定时速度动作。
 25. `start_patrol` 只在已经建图的区域按官方覆盖路由持续巡视。`start_stroll` 使用官方 Frontier 检测与导航，但在每个局部未知分支决策点随机选择一条、退休同一决策点的其他分支、拒绝回头补覆盖；无顺向候选时结束。该策略有意遗漏可探索区域，不得描述为巡逻或完整探索。
 26. 底层 Go2 Blueprint 不得组合官方 `McpClient` 或任何 LLM Agent。官方 `PerceiveLoopSkill` 所需的 `AgentSpec` 由无模型的 `StandaloneAgentBridge` 提供：无 `then` 的视觉命中继续通过 MCP 工具流通知上层；带 `then` 的命中只允许经底层本机公开 MCP 端点调用一个公开工具。该桥接器不是对话 Agent，也不拥有用户会话。
+27. Go2 实机入口必须等待 `ModuleCoordinator.build()` 完成官方模块启动，再通过锁定版 `GO2Connection.publish_request` 向官方 Sport endpoint 发送 `SwitchJoystick`（API `1027`，`data=true`），显式启用 `cmd_vel` 使用的固件输入。响应状态码不为 `0`、响应结构无效或调用抛出异常时，必须停止 coordinator 并让进程启动失败；不得进入服务主循环或声称 MCP 已就绪。状态码成功不是独立的底盘运动证明，dry-run 不执行该调用。
 
 ## 运行约束
 
 - DIMOS `0.0.14b1` 要求 Python 3.10 至 3.12；本开发机的 Python 3.14 只能运行不依赖 DIMOS 的纯单元测试。
 - 默认 MCP 安装 `dimos[web]==0.0.14b1` 以及 DIMOS 技能 schema 生成实际需要的 `langchain-core==1.5.0`；Go2 extra 安装 `dimos[unitree]==0.0.14b1`，用于官方运动、感知、跟随、语音、地图与导航能力。
 - 上游机器狗 MCP 默认 dry-run。实机 Go2 操作仍需显式设置上游的 `DIMOS_DOG_MCP_MODE=go2`，并满足场地隔离、独立急停和官方网络预检。
+- Go2 入口在官方 `StandUp` / `BalanceStand` 初始化完成后显式执行一次 `SwitchJoystick` Sport 请求。该调用不增加 MCP 工具或环境变量；响应状态码不为 `0`、响应结构无效或调用抛出异常会终止启动，避免导航正常规划但底盘静默忽略 `WIRELESS_CONTROLLER` 速度帧。
 - 独立底层 MCP 默认只监听 `127.0.0.1:9990`。跨机器调用时必须显式设置 `DIMOS_DOG_MCP_HOST=0.0.0.0` 或指定 interface 地址，并通过受信任网络和主机防火墙限制访问。
 - 包装器默认请求超时为 10 秒，配置通过 `DIMOS_MCP_WRAPPER_*` 环境变量提供。它不直接打开硬件连接。
 - Agent Webhook Gateway 要求 Node.js 22.19 或更高版本，使用 Node 原生 SQLite 持久化 inbox/outbox，并读取既有 Pi Agent 模型与认证配置。
@@ -89,6 +91,7 @@ flowchart LR
 - hook seam：hook 非阻塞、只读、异常隔离。
 - DIMOS MCP seam：在兼容环境中，底层 `tools/list` 精确发现 20 个受支持的锁定版官方工具和 7 个自研工具，且不包含 `speak`；dry-run 的硬件能力返回明确的 Go2 模式错误。
 - Go2 Blueprint seam：静态组合中必须存在且仅存在一个满足 `AgentSpec` 的 `StandaloneAgentBridge`，避免 `PerceiveLoopSkill` 因缺少依赖而在连接硬件后启动失败。
+- Go2 locomotion seam：官方模块完成启动后，入口必须对已部署的唯一 `GO2Connection` 通过 `publish_request` 发送一次 API `1027` / `data=true`；响应状态码不为 `0`、响应结构无效或抛出异常必须使启动失败。
 - 输入 Webhook seam：严格请求 schema、持久化后 `202`、稳定 `instruction_id` 幂等与冲突响应。
 - 固定 Agent seam：普通事件按持久化顺序串行处理，系统提示词明确最终输出直接面向用户，27 个包装器 MCP 工具保持激活。
 - 输出 Webhook seam：完整终态回复、稳定 `reply_id`、失败重投与进程恢复均不得重跑 Agent 或 MCP 工具。
