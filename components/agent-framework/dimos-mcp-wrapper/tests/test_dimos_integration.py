@@ -40,12 +40,25 @@ class DimosWrapperIntegrationTests(unittest.TestCase):
         else:
             os.environ["DIMOS_MCP_WRAPPER_PORT"] = cls._previous_env_port
 
-    def test_native_mcp_discovers_the_forwarded_dog_tools(self) -> None:
+    def test_native_mcp_discovers_the_forwarded_dog_and_navigation_tools(self) -> None:
         result = _mcp_request(self._port, "tools/list")
         names = {tool["name"] for tool in result["result"]["tools"]}
 
-        self.assertTrue(
-            {"move_forward", "move_backward", "stop_motion", "motion_status"} <= names
+        self.assertEqual(
+            names,
+            {
+                "move_forward",
+                "move_backward",
+                "stop_motion",
+                "motion_status",
+                "tag_location",
+                "navigate_with_text",
+                "stop_navigation",
+                "begin_exploration",
+                "end_exploration",
+                "start_patrol",
+                "stop_patrol",
+            },
         )
 
 

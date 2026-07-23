@@ -9,27 +9,44 @@ from dimos.core.global_config import global_config
 from .config import McpServerConfig, RuntimeMode, read_mcp_server_config, read_runtime_mode
 from .dry_run import DryRunTwistSink
 from .module import DogMotionSkill
+from .navigation import DryRunNavigationSkill
 from .server import DogMcpServer
 
 try:
-    from dimos.robot.unitree.go2.connection import GO2Connection
+    from dimos.agents.skills.navigation import NavigationSkillContainer
+    from dimos.robot.unitree.go2.blueprints.smart.unitree_go2_spatial import (
+        unitree_go2_spatial,
+    )
 except ModuleNotFoundError:
-    GO2Connection = None
+    NavigationSkillContainer = None
+    unitree_go2_spatial = None
 
 
 def build_blueprint():
     """Build an MCP blueprint using dry-run unless Go2 mode is explicitly selected."""
 
     if read_runtime_mode() is RuntimeMode.GO2:
-        if GO2Connection is None:
-            raise RuntimeError(
-                "Go2 mode requires the optional dependency; install dimos-dog-mcp[go2]"
-            )
-        base = GO2Connection.blueprint()
-    else:
-        base = DryRunTwistSink.blueprint()
+        return _build_go2_blueprint()
     return autoconnect(
-        base,
+        DryRunTwistSink.blueprint(),
+        DogMotionSkill.blueprint(),
+        DryRunNavigationSkill.blueprint(),
+        DogMcpServer.blueprint(),
+    )
+
+
+def _build_go2_blueprint():
+    """Compose the official DIMOS mapping, planning, exploration, and patrol stack."""
+
+    if NavigationSkillContainer is None or unitree_go2_spatial is None:
+        raise RuntimeError(
+            "Go2 navigation mode requires the optional dependency; "
+            "install dimos-dog-mcp[go2]"
+        )
+
+    return autoconnect(
+        unitree_go2_spatial,
+        NavigationSkillContainer.blueprint(),
         DogMotionSkill.blueprint(),
         DogMcpServer.blueprint(),
     )

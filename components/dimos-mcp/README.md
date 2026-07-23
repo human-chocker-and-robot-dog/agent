@@ -1,14 +1,13 @@
 # 独立 DIMOS 机器狗 MCP
 
-`dimos-mcp` 是部署在机器狗侧主机上的独立底层 MCP。它不依赖 Agent Webhook Gateway 或 MCP 包装器运行，只负责把标准 HTTP MCP 工具调用转换为 DIMOS `cmd_vel: Twist`，再交给 dry-run sink 或 Unitree Go2 连接。
+`dimos-mcp` 是部署在机器狗侧主机上的独立底层 MCP。它不依赖 Agent Webhook Gateway 或 MCP 包装器运行。定时运动工具转换为 DIMOS `cmd_vel: Twist`；Go2 模式同时组合 DIMOS 官方空间地图、代价地图、重规划 A*、Frontier 探索和巡逻模块。
 
 ```mermaid
 flowchart LR
     U["上层机器<br/>Agent / MCP wrapper / MCP Host"] -->|"HTTP MCP"| M["底层机器<br/>dimos-mcp :9990/mcp"]
-    M --> S["DogMotionSkill"]
-    S -->|"cmd_vel: Twist"| C{"运行模式"}
-    C -->|"默认"| D["DryRunTwistSink"]
-    C -->|"显式启用"| G["DIMOS GO2Connection"]
+    M --> C{"运行模式"}
+    C -->|"默认"| D["Dry-run motion + unavailable navigation"]
+    C -->|"显式启用"| G["DIMOS official Go2 spatial/navigation stack"]
     G --> R["Unitree Go2"]
 ```
 
@@ -22,8 +21,17 @@ flowchart LR
 | `move_backward` | `speed_mps`、`duration_s` | 按给定速度和时长后退；实机动作结束时发布零速度。 |
 | `stop_motion` | 无 | 取消本地运动并立即发布零速度。 |
 | `motion_status` | 无 | 返回本地命令执行状态，不是机器狗遥测。 |
+| `tag_location` | `location_name` | 将当前地图位置保存为具名地点。 |
+| `navigate_with_text` | `query` | 解析自然语言目的地并启动 DIMOS 官方导航。 |
+| `stop_navigation` | 无 | 取消当前定点导航目标。 |
+| `begin_exploration` | 无 | 启动 Wavefront Frontier 自主探索。 |
+| `end_exploration` | 无 | 停止自主探索。 |
+| `start_patrol` | 无 | 在已知地图内启动自主巡逻。 |
+| `stop_patrol` | 无 | 停止自主巡逻。 |
 
 速度和时长必须是正有限数值。当前不设置硬编码数值上限；dry-run 和 Go2 都使用同一运动状态机并拒绝重叠运动。可预期的参数或互斥错误返回 `{"status":"error","error":"..."}` 文本结果。MCP 请求返回只表示底层命令处理结果，不证明机器狗已经到达目标位置。
+
+7 个导航工具只有 Go2 模式会执行。dry-run 中它们仍可通过 `tools/list` 发现，但调用会返回包含 `required_mode: "go2"` 的错误，不会伪造地图或导航结果。定点导航、探索和巡逻应分别使用对应的停止工具；`stop_motion` 只终止本项目的定时速度动作。
 
 ## 运行要求
 
@@ -145,6 +153,13 @@ move_forward
 move_backward
 stop_motion
 motion_status
+tag_location
+navigate_with_text
+stop_navigation
+begin_exploration
+end_exploration
+start_patrol
+stop_patrol
 ```
 
 独立 Server 会隐藏 DIMOS 自带的 `server_status`、`list_modules` 和 `agent_send`，避免扩大无认证远程 endpoint 的能力范围。
@@ -184,6 +199,28 @@ curl --request POST "http://192.168.66.160:9990/mcp" \
 
 ```bash
 claude mcp add --transport http --scope project dimos-dog http://192.168.66.160:9990/mcp
+```
+
+### 本机 Python GUI
+
+`dimos-dog-gui` 是一个直接调用 HTTP MCP 的 Tkinter 图形控制台。它默认连接当前机器的 `http://127.0.0.1:9990/mcp`，可在界面内改为其他受信任的 HTTP(S) endpoint。GUI 提供前进、后退、立即停止、状态查询和连接检查按钮；前进/后退输入为速度（m/s）和持续时间（s），界面仅显示“速度 × 时间”的估算距离，不宣称机器狗精确到达该距离。
+
+在支持图形界面的 WSL/Ubuntu 会话中启动：
+
+```bash
+dimos-dog-gui
+```
+
+Ubuntu 缺少 Tk 时先安装系统包 `python3-tk`。该 GUI 不保存 Go2 IP、AES 密钥或运行模式，也不直接连接硬件；每次按钮操作仅向已运行的 MCP endpoint 发送一次 JSON-RPC 请求，不会自动重试运动工具。
+
+### WSL 真机启动脚本
+
+`scripts/run-go2-mcp.sh` 只在 WSL/Ubuntu 中运行真实 Go2 MCP。它从 WSL 私有文件 `$HOME/.config/dimos-dog-mcp/go2.env` 读取 Go2 IP、AES 密钥和监听配置；该文件必须是权限 `600`，不应位于仓库或 Git 中。仓库提供无密钥模板 `config/go2.env.example`。
+
+启动脚本会进入 Go2 模式，因此会执行 DIMOS Go2 连接的初始化流程；保持急停可用并让启动终端保持运行。GUI 在另一个 WSL 终端运行，默认连接同一 WSL 的 `127.0.0.1:9990`。
+
+```bash
+bash /absolute/path/to/dimos-mcp/scripts/run-go2-mcp.sh
 ```
 
 ### 通过本项目包装器
@@ -235,7 +272,7 @@ export DIMOS_DOG_MCP_PORT=9990
 dimos-dog-mcp
 ```
 
-Go2 模式复用 DIMOS 官方 `GO2Connection`。正常到期、显式停止和模块关闭都会发布零速度。MCP 客户端断开不等同于动作取消；需要提前停止时必须调用 `stop_motion`。
+Go2 模式复用 DIMOS 官方 `unitree_go2_spatial` Blueprint，并增加官方 `NavigationSkillContainer`。该 Blueprint 包含 Go2 连接、体素地图、代价地图、`ReplanningAStarPlanner`、`WavefrontFrontierExplorer`、`PatrollingModule` 和 `MovementManager`。定时速度动作正常到期、显式停止和模块关闭都会发布零速度。MCP 客户端断开不等同于取消；应根据当前任务调用 `stop_motion`、`stop_navigation`、`end_exploration` 或 `stop_patrol`。
 
 非 Go2 设备应在底层包中替换或扩展 DIMOS 连接 module，使其消费同名、同类型的 `cmd_vel: Twist`，同时保留参数验证、运动互斥和零速度停止。
 

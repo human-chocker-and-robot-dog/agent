@@ -12,7 +12,7 @@ flowchart LR
 
 ## 安装与启动
 
-DIMOS `0.0.14b1` 要求 Python 3.10 至 3.12。底层机器应按 `components/dimos-mcp/README.md` 独立启动机器狗 MCP。若同机部署：
+DIMOS `0.0.14b1` 要求 Python 3.10 至 3.12。包装器固定安装 `dimos[web]==0.0.14b1` 和 DIMOS 生成 `@skill` schema 所需的 `langchain-core==1.5.0`。底层机器应按 `components/dimos-mcp/README.md` 独立启动机器狗 MCP。若同机部署：
 
 ```bash
 uv venv --python 3.12
@@ -43,7 +43,7 @@ claude mcp add --transport http --scope project dimos-dog-wrapper http://127.0.0
 
 ## 工具
 
-包装器暴露与上游同名的四个工具，并将参数不变地转发：
+包装器暴露与上游同名的 11 个工具，并将参数不变地转发：
 
 | 工具 | 上游工具 | 说明 |
 | --- | --- | --- |
@@ -51,8 +51,17 @@ claude mcp add --transport http --scope project dimos-dog-wrapper http://127.0.0
 | `move_backward` | `move_backward` | 转发后退速度和持续时间。 |
 | `stop_motion` | `stop_motion` | 立即转发停止，不重试。 |
 | `motion_status` | `motion_status` | 转发上游本地运动状态。 |
+| `tag_location` | `tag_location` | 转发当前位置命名。 |
+| `navigate_with_text` | `navigate_with_text` | 转发自然语言目的地。 |
+| `stop_navigation` | `stop_navigation` | 取消定点导航。 |
+| `begin_exploration` | `begin_exploration` | 启动 Frontier 探索。 |
+| `end_exploration` | `end_exploration` | 停止 Frontier 探索。 |
+| `start_patrol` | `start_patrol` | 启动已知地图巡逻。 |
+| `stop_patrol` | `stop_patrol` | 停止巡逻。 |
 
-速度、持续时间、dry-run/Go2 模式和最终零速度停止均由上游 `dimos-dog-mcp` 负责。包装器不连接硬件，也不伪造遥测。
+速度、持续时间、dry-run/Go2 模式、最终零速度停止和官方导航算法均由上游 `dimos-dog-mcp` 负责。包装器不连接硬件、不运行路径规划，也不伪造遥测。dry-run 导航错误会按普通上游错误触发 `after_error`。
+
+包装器 endpoint 只公开上述 11 个转发工具；DIMOS 自带的 `server_status`、`list_modules` 和 `agent_send` 不对外暴露。
 
 ## 配置
 

@@ -14,15 +14,27 @@ describe("fixed Pi agent runtime", () => {
 		expect(prompt).toContain("方向默认为向前");
 	});
 
-	it("registers only the four wrapper MCP tools", () => {
+	it("registers the motion and official navigation wrapper MCP tools", () => {
 		const tools = createDogTools({
 			callTool: async () => "accepted",
 		});
 
-		expect(tools.map((tool) => tool.name)).toEqual(["move_forward", "move_backward", "stop_motion", "motion_status"]);
+		expect(tools.map((tool) => tool.name)).toEqual([
+			"move_forward",
+			"move_backward",
+			"stop_motion",
+			"motion_status",
+			"tag_location",
+			"navigate_with_text",
+			"stop_navigation",
+			"begin_exploration",
+			"end_exploration",
+			"start_patrol",
+			"stop_patrol",
+		]);
 	});
 
-	it("keeps all four custom MCP tools active while disabling built-in coding tools", async () => {
+	it("keeps all custom MCP tools active while disabling built-in coding tools", async () => {
 		const directory = mkdtempSync(join(tmpdir(), "agent-webhook-runtime-"));
 		try {
 			const session = await createPiAgentSession({
@@ -38,6 +50,13 @@ describe("fixed Pi agent runtime", () => {
 				"move_backward",
 				"stop_motion",
 				"motion_status",
+				"tag_location",
+				"navigate_with_text",
+				"stop_navigation",
+				"begin_exploration",
+				"end_exploration",
+				"start_patrol",
+				"stop_patrol",
 			]);
 			session.dispose();
 		} finally {

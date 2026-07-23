@@ -17,6 +17,7 @@ go2 = ["dimos[unitree]==0.0.14b1"]
 
 [project.scripts]
 dimos-dog-mcp = "dimos_dog_mcp.blueprint:main"
+dimos-dog-gui = "dimos_dog_mcp.gui:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

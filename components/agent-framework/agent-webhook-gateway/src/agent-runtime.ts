@@ -24,6 +24,13 @@ export function buildAgentSystemPrompt(defaultSpeedMps: number): string {
 - 距离运动是基于速度和时长的估算，不得声称机器狗精确移动或到达了指定距离。
 - 工具调用成功只说明命令已被 MCP 接受；最终回复不得虚构机器狗遥测或物理状态。
 
+导航规则：
+- 用户指定具名地点或自然语言目的地时，可调用 navigate_with_text；不得把它改写成定时直行。
+- tag_location 只用于把机器狗当前地图位置保存为名称。
+- “探索未知区域”使用 begin_exploration；“在已知区域持续巡逻”使用 start_patrol，不得混为一谈。
+- 停止定点导航、探索和巡逻分别使用 stop_navigation、end_exploration、stop_patrol。
+- 导航、探索和巡逻只在下层 Go2 模式可用；下层返回 dry-run 或错误时，必须如实告诉用户没有启动真实导航。
+
 规范化后精确等于“停”或“stop”的输入会在进入你之前由输入网关处理。其他文本都作为普通用户请求处理。`;
 }
 
@@ -112,7 +119,136 @@ export function createDogTools(mcp: McpToolCaller) {
 		}),
 	});
 
-	return [moveForward, moveBackward, stopMotion, motionStatus] as const;
+	const tagLocation = defineTool({
+		name: "tag_location",
+		label: "Tag Location",
+		description: "把机器狗当前地图位置保存为可复用的名称。",
+		promptSnippet: "命名并保存当前地图位置",
+		parameters: Type.Object(
+			{
+				location_name: Type.String({
+					description: "当前位置的人类可读名称",
+					minLength: 1,
+				}),
+			},
+			{ additionalProperties: false },
+		),
+		executionMode: "sequential",
+		execute: async (_toolCallId, params, signal) => ({
+			content: [
+				{
+					type: "text",
+					text: await mcp.callTool("tag_location", { location_name: params.location_name }, signal),
+				},
+			],
+			details: {},
+		}),
+	});
+
+	const navigateWithText = defineTool({
+		name: "navigate_with_text",
+		label: "Navigate With Text",
+		description: "让 DIMOS 解析自然语言目的地，并使用官方地图和路径规划开始导航。",
+		promptSnippet: "导航到具名地点或自然语言描述的目的地",
+		parameters: Type.Object(
+			{
+				query: Type.String({
+					description: "自然语言目的地或已标记位置名称",
+					minLength: 1,
+				}),
+			},
+			{ additionalProperties: false },
+		),
+		executionMode: "sequential",
+		execute: async (_toolCallId, params, signal) => ({
+			content: [
+				{
+					type: "text",
+					text: await mcp.callTool("navigate_with_text", { query: params.query }, signal),
+				},
+			],
+			details: {},
+		}),
+	});
+
+	const stopNavigation = defineTool({
+		name: "stop_navigation",
+		label: "Stop Navigation",
+		description: "取消当前定点导航目标。",
+		promptSnippet: "停止当前定点导航",
+		parameters: Type.Object({}, { additionalProperties: false }),
+		executionMode: "sequential",
+		execute: async (_toolCallId, _params, signal) => ({
+			content: [{ type: "text", text: await mcp.callTool("stop_navigation", {}, signal) }],
+			details: {},
+		}),
+	});
+
+	const beginExploration = defineTool({
+		name: "begin_exploration",
+		label: "Begin Exploration",
+		description: "启动 DIMOS Wavefront Frontier 自主探索未知区域。",
+		promptSnippet: "开始自主探索未知区域",
+		parameters: Type.Object({}, { additionalProperties: false }),
+		executionMode: "sequential",
+		execute: async (_toolCallId, _params, signal) => ({
+			content: [{ type: "text", text: await mcp.callTool("begin_exploration", {}, signal) }],
+			details: {},
+		}),
+	});
+
+	const endExploration = defineTool({
+		name: "end_exploration",
+		label: "End Exploration",
+		description: "停止当前 DIMOS 自主探索。",
+		promptSnippet: "停止自主探索",
+		parameters: Type.Object({}, { additionalProperties: false }),
+		executionMode: "sequential",
+		execute: async (_toolCallId, _params, signal) => ({
+			content: [{ type: "text", text: await mcp.callTool("end_exploration", {}, signal) }],
+			details: {},
+		}),
+	});
+
+	const startPatrol = defineTool({
+		name: "start_patrol",
+		label: "Start Patrol",
+		description: "启动 DIMOS 在已知地图内的自主巡逻。",
+		promptSnippet: "开始在已知地图内自主巡逻",
+		parameters: Type.Object({}, { additionalProperties: false }),
+		executionMode: "sequential",
+		execute: async (_toolCallId, _params, signal) => ({
+			content: [{ type: "text", text: await mcp.callTool("start_patrol", {}, signal) }],
+			details: {},
+		}),
+	});
+
+	const stopPatrol = defineTool({
+		name: "stop_patrol",
+		label: "Stop Patrol",
+		description: "停止当前 DIMOS 自主巡逻。",
+		promptSnippet: "停止自主巡逻",
+		parameters: Type.Object({}, { additionalProperties: false }),
+		executionMode: "sequential",
+		execute: async (_toolCallId, _params, signal) => ({
+			content: [{ type: "text", text: await mcp.callTool("stop_patrol", {}, signal) }],
+			details: {},
+		}),
+	});
+
+	return [
+		moveForward,
+		moveBackward,
+		stopMotion,
+		motionStatus,
+		tagLocation,
+		navigateWithText,
+		stopNavigation,
+		beginExploration,
+		endExploration,
+		startPatrol,
+		stopPatrol,
+	] as const;
 }
 
 export interface PiUserTextAgentOptions {

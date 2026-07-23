@@ -57,19 +57,77 @@ class DimosIntegrationTests(unittest.TestCase):
             },
         )
 
-    def test_native_mcp_discovers_dry_run_motion_skills(self) -> None:
+    def test_native_mcp_discovers_the_public_motion_and_navigation_tools(self) -> None:
         result = self._adapter.call("tools/list")
         names = {tool["name"] for tool in result["result"]["tools"]}
         self.assertEqual(
             names,
-            {"move_forward", "move_backward", "stop_motion", "motion_status"},
+            {
+                "move_forward",
+                "move_backward",
+                "stop_motion",
+                "motion_status",
+                "tag_location",
+                "navigate_with_text",
+                "stop_navigation",
+                "begin_exploration",
+                "end_exploration",
+                "start_patrol",
+                "stop_patrol",
+            },
         )
+
+    def test_dry_run_navigation_tool_reports_that_go2_mode_is_required(self) -> None:
+        result = self._adapter.call(
+            "tools/call",
+            {
+                "name": "navigate_with_text",
+                "arguments": {"query": "去门口"},
+            },
+        )
+        payload = json.loads(result["result"]["content"][0]["text"])
+        self.assertEqual(payload["status"], "error")
+        self.assertEqual(payload["required_mode"], "go2")
 
     def test_server_is_running_on_the_configured_remote_listener(self) -> None:
         self.assertEqual(self._global_config.listen_host, "0.0.0.0")
         self.assertEqual(self._global_config.mcp_port, 9990)
         result = self._adapter.call("tools/list")
         self.assertIn("tools", result["result"])
+
+    def test_go2_blueprint_composes_the_official_navigation_stack_without_starting_it(self) -> None:
+        from dimos_dog_mcp import blueprint as blueprint_module
+
+        if blueprint_module.unitree_go2_spatial is None:
+            self.skipTest("requires dimos-dog-mcp[go2]")
+
+        previous_mode = os.environ.get("DIMOS_DOG_MCP_MODE")
+        os.environ["DIMOS_DOG_MCP_MODE"] = "go2"
+        try:
+            blueprint = blueprint_module.build_blueprint()
+        finally:
+            if previous_mode is None:
+                os.environ.pop("DIMOS_DOG_MCP_MODE", None)
+            else:
+                os.environ["DIMOS_DOG_MCP_MODE"] = previous_mode
+
+        module_names = {atom.module.__name__ for atom in blueprint.blueprints}
+        self.assertTrue(
+            {
+                "GO2Connection",
+                "VoxelGridMapper",
+                "CostMapper",
+                "ReplanningAStarPlanner",
+                "WavefrontFrontierExplorer",
+                "PatrollingModule",
+                "MovementManager",
+                "SpatialMemory",
+                "NavigationSkillContainer",
+                "DogMotionSkill",
+                "DogMcpServer",
+            }
+            <= module_names
+        )
 
     def test_dry_run_does_not_start_motion(self) -> None:
         result = self._adapter.call(

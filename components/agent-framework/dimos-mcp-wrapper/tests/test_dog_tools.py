@@ -23,6 +23,13 @@ class DogMcpToolsTests(unittest.TestCase):
         self.assertEqual(tools.move_backward(0.08, 0.3), "move_backward")
         self.assertEqual(tools.stop_motion(), "stop_motion")
         self.assertEqual(tools.motion_status(), "motion_status")
+        self.assertEqual(tools.tag_location("门口"), "tag_location")
+        self.assertEqual(tools.navigate_with_text("去门口"), "navigate_with_text")
+        self.assertEqual(tools.stop_navigation(), "stop_navigation")
+        self.assertEqual(tools.begin_exploration(), "begin_exploration")
+        self.assertEqual(tools.end_exploration(), "end_exploration")
+        self.assertEqual(tools.start_patrol(), "start_patrol")
+        self.assertEqual(tools.stop_patrol(), "stop_patrol")
 
         self.assertEqual(
             forwarder.calls,
@@ -31,5 +38,12 @@ class DogMcpToolsTests(unittest.TestCase):
                 ("move_backward", {"speed_mps": 0.08, "duration_s": 0.3}),
                 ("stop_motion", {}),
                 ("motion_status", {}),
+                ("tag_location", {"location_name": "门口"}),
+                ("navigate_with_text", {"query": "去门口"}),
+                ("stop_navigation", {}),
+                ("begin_exploration", {}),
+                ("end_exploration", {}),
+                ("start_patrol", {}),
+                ("stop_patrol", {}),
             ],
         )

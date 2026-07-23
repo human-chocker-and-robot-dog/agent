@@ -48,3 +48,38 @@ class DogMcpTools:
         """Forward the upstream local motion-status request."""
 
         return self._forwarder.forward("motion_status", {})
+
+    def tag_location(self, location_name: str) -> str:
+        """Forward a request to tag the robot's current mapped location."""
+
+        return self._forwarder.forward("tag_location", {"location_name": location_name})
+
+    def navigate_with_text(self, query: str) -> str:
+        """Forward a semantic navigation request to the official DIMOS stack."""
+
+        return self._forwarder.forward("navigate_with_text", {"query": query})
+
+    def stop_navigation(self) -> str:
+        """Forward cancellation of the active point-to-point navigation goal."""
+
+        return self._forwarder.forward("stop_navigation", {})
+
+    def begin_exploration(self) -> str:
+        """Forward startup of DIMOS wavefront frontier exploration."""
+
+        return self._forwarder.forward("begin_exploration", {})
+
+    def end_exploration(self) -> str:
+        """Forward cancellation of DIMOS wavefront frontier exploration."""
+
+        return self._forwarder.forward("end_exploration", {})
+
+    def start_patrol(self) -> str:
+        """Forward startup of DIMOS autonomous patrol."""
+
+        return self._forwarder.forward("start_patrol", {})
+
+    def stop_patrol(self) -> str:
+        """Forward cancellation of DIMOS autonomous patrol."""
+
+        return self._forwarder.forward("stop_patrol", {})

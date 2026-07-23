@@ -10,6 +10,7 @@
 	"scripts": {
 		"check": "tsc --noEmit -p tsconfig.json",
 		"build": "tsc -p tsconfig.build.json",
+		"demo:dry-run": "node test/support/dry-run-demo.ts",
 		"test": "node node_modules/vitest/dist/cli.js --run test"
 	},
 	"dependencies": {

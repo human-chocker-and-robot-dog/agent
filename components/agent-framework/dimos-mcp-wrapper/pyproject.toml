@@ -7,7 +7,10 @@ name = "dimos-mcp-wrapper"
 version = "0.1.0"
 description = "Thin DIMOS MCP forwarding layer with non-blocking lifecycle hooks"
 requires-python = ">=3.10,<3.13"
-dependencies = ["dimos[web]==0.0.14b1"]
+dependencies = [
+    "dimos[web]==0.0.14b1",
+    "langchain-core==1.5.0",
+]
 
 [project.scripts]
 dimos-mcp-wrapper = "dimos_mcp_wrapper.blueprint:main"

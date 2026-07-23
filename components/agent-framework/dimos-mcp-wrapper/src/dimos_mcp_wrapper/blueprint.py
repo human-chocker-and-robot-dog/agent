@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
-from dimos.agents.mcp.mcp_server import McpServer
 from dimos.core.coordination.blueprints import autoconnect
 from dimos.core.coordination.module_coordinator import ModuleCoordinator
 from dimos.core.global_config import global_config
@@ -12,6 +11,7 @@ from dimos.core.global_config import global_config
 from .config import read_wrapper_config
 from .hooks import McpCallHook
 from .module import McpForwardingSkill
+from .server import WrapperMcpServer
 
 
 def build_blueprint(*, hooks: Iterable[McpCallHook] = ()):
@@ -25,7 +25,7 @@ def build_blueprint(*, hooks: Iterable[McpCallHook] = ()):
             upstream_url=config.upstream_url,
             timeout_s=config.timeout_s,
         ),
-        McpServer.blueprint(),
+        WrapperMcpServer.blueprint(),
     )
 
 

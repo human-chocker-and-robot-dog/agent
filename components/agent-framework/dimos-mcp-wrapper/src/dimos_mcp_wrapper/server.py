@@ -1,4 +1,4 @@
-"""Restricted DIMOS MCP server exposing only the framework's public tools."""
+"""Restricted DIMOS MCP server for the wrapper's public forwarding contract."""
 
 from __future__ import annotations
 
@@ -7,8 +7,6 @@ from dimos.core.core import rpc
 from dimos.core.module import SkillInfo
 from dimos.core.rpc_client import RpcCall, RPCClient
 
-from .navigation import NAVIGATION_TOOL_NAMES
-
 
 PUBLIC_TOOL_NAMES = frozenset(
     {
@@ -16,22 +14,27 @@ PUBLIC_TOOL_NAMES = frozenset(
         "move_backward",
         "stop_motion",
         "motion_status",
+        "tag_location",
+        "navigate_with_text",
+        "stop_navigation",
+        "begin_exploration",
+        "end_exploration",
+        "start_patrol",
+        "stop_patrol",
     }
-) | NAVIGATION_TOOL_NAMES
+)
 
 
-class DogMcpServer(McpServer):
-    """Publish only the explicit dog MCP contract on the network endpoint."""
+class WrapperMcpServer(McpServer):
+    """Expose only forwarding tools and hide DIMOS server-management skills."""
 
     @rpc
     def get_skills(self) -> list[SkillInfo]:
-        """Exclude this server module's own skills from MCP discovery and calls."""
-
         return []
 
     @rpc
     def on_system_modules(self, modules: list[RPCClient]) -> None:
-        """Restrict DIMOS's dynamic skill registry to the public allowlist."""
+        """Restrict DIMOS's dynamic skill registry to the forwarding allowlist."""
 
         assert self.rpc is not None
         app.state.skills = [

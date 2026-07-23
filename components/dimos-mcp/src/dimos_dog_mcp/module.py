@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 
 from dimos.agents.annotation import skill
+from dimos.agents.capabilities import CAP_MOVEMENT
 from dimos.core.core import rpc
 from dimos.core.module import Module
 from dimos.core.stream import Out
@@ -44,7 +45,7 @@ class DogMotionSkill(Module):
         self._runtime.stop()
         super().stop()
 
-    @skill
+    @skill(uses=[CAP_MOVEMENT])
     def move_forward(
         self,
         speed_mps: float = DEFAULT_SPEED_MPS,
@@ -59,7 +60,7 @@ class DogMotionSkill(Module):
 
         return self._move("forward", 1.0, speed_mps, duration_s)
 
-    @skill
+    @skill(uses=[CAP_MOVEMENT])
     def move_backward(
         self,
         speed_mps: float = DEFAULT_SPEED_MPS,

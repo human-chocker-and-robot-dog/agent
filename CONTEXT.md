@@ -19,7 +19,7 @@
 | 名称 | 位置 | 职责 |
 | --- | --- | --- |
 | 机器人组件目录 | `components/` | 组合仓库中两个可独立部署组件的唯一根目录。 |
-| 独立底层机器狗 MCP | `components/dimos-mcp` | 部署在机器狗侧主机的独立 DIMOS MCP，暴露 `move_forward`、`move_backward`、`stop_motion`、`motion_status`，并通过 `cmd_vel: Twist` 连接 dry-run 或 Unitree Go2。 |
+| 独立底层机器狗 MCP | `components/dimos-mcp` | 部署在机器狗侧主机的独立 DIMOS MCP，公开 4 个定时运动工具和 7 个官方导航/探索/巡逻工具；dry-run 只执行定时运动模拟，Go2 模式组合 DIMOS 官方完整导航栈。 |
 | Agent Framework | `components/agent-framework` | 部署在上层机器，组合固定 Pi Agent 会话、MCP 包装器、输入网关与回复投递器。 |
 | MCP 薄包装器 | `components/agent-framework/dimos-mcp-wrapper` | 独立 DIMOS MCP 服务，转发同名工具到上游 MCP，并发出生命周期 hook。 |
 | 上游 MCP | 默认 `http://127.0.0.1:9990/mcp` | 真正执行机器狗命令的服务。 |
@@ -39,7 +39,7 @@ flowchart LR
     G --> A[固定 Pi Agent 会话]
     A --> B[DIMOS MCP wrapper :9991]
     B -->|trusted network, one tools/call| C[standalone dog MCP :9990]
-    C --> D[DIMOS cmd_vel]
+    C --> D[DIMOS motion or navigation stack]
     D --> E[dry-run or Go2]
     B -. non-blocking lifecycle events .-> F[hook adapters]
     G -->|agent.reply.completed| R[回复接收端]
@@ -47,7 +47,7 @@ flowchart LR
 
 ## 不变量
 
-1. 机器狗动作的参数验证、并发控制、零速度结束和 dry-run/Go2 选择属于上游机器狗 MCP；包装器不得复制或绕过这些逻辑。
+1. 机器狗动作的参数验证、并发控制、零速度结束、dry-run/Go2 选择，以及 Go2 地图、规划、探索和巡逻实现属于上游机器狗 MCP；包装器不得复制或绕过这些逻辑。
 2. 每个包装器工具调用最多向上游发送一次 `tools/call` 请求。不得自动重试运动命令。
 3. 包装器必须原样转发已公开工具的名称和参数，并返回上游的文本结果或清晰的上游错误。底层预期错误使用 `{"status":"error","error":"..."}` 文本 envelope；包装器和 Agent 网关还必须识别 DIMOS 将异常包装成的 `Error running tool '...'` 文本，不能把它当作成功。
 4. `stop_motion` 优先于 hook：请求必须立刻转发，hook 不能让它等待、重试或被吞掉。
@@ -68,6 +68,9 @@ flowchart LR
 19. 可执行的运动请求必须为“速度加时长”“距离加时长”或仅“距离”；方向可选且默认向前。时长或速度脱离其配对参数均不完整。其他可能导致机器狗运动但必要参数不明确的请求，Agent 必须以面向用户的最终文本追问，且不得调用运动工具、套用默认参数或猜测用户意图。
 20. 距离加时长的请求必须将距离除以时长换算为正的有限速度；仅距离的请求必须基于部署标定的默认速度换算为正的有限时长。最终回复不得声称机器狗精确移动或到达了该距离。
 21. 网关进程恢复时，不得重新运行已进入 `processing` 但未形成 outbox 的事件；应为其持久化既定通用失败回复，以避免机器狗副作用在崩溃恢复后重复执行。
+22. 底层 MCP 的公开工具集合固定为 4 个定时运动工具加 7 个官方导航工具；DIMOS 模块附带的管理、感知或其他 `@skill` 不得因组合官方 Blueprint 而意外暴露到无认证 endpoint。
+23. `tag_location`、`navigate_with_text`、`stop_navigation`、`begin_exploration`、`end_exploration`、`start_patrol`、`stop_patrol` 在 Go2 模式中必须由 DIMOS 官方模块实现。dry-run 只能返回明确的 `required_mode=go2` 错误，不得伪造定位、路径、探索或巡逻成功。
+24. 定点导航、Frontier 探索和巡逻是不同生命周期。提前终止时必须分别调用 `stop_navigation`、`end_exploration` 或 `stop_patrol`；`stop_motion` 只停止本项目的定时速度动作，不能被描述为取消所有官方后台导航任务。
 
 ## 运行约束
 
@@ -80,11 +83,11 @@ flowchart LR
 
 ## 测试 seam
 
-- 上游 MCP seam：标准 JSON-RPC `tools/call` 请求、单次调用、文本结果与错误传递。
+- 上游 MCP seam：标准 JSON-RPC `tools/call` 请求、11 个公开工具的单次调用、文本结果与错误传递。
 - hook seam：hook 非阻塞、只读、异常隔离。
-- DIMOS MCP seam：在兼容环境中，`tools/list` 发现四个包装器工具。
+- DIMOS MCP seam：在兼容环境中，底层 `tools/list` 只发现 4 个定时运动工具和 7 个导航工具；dry-run 导航调用返回明确的 Go2 模式错误。
 - 输入 Webhook seam：严格请求 schema、持久化后 `202`、稳定 `instruction_id` 幂等与冲突响应。
-- 固定 Agent seam：普通事件按持久化顺序串行处理，系统提示词明确最终输出直接面向用户，四个包装器 MCP 工具保持激活。
+- 固定 Agent seam：普通事件按持久化顺序串行处理，系统提示词明确最终输出直接面向用户，11 个包装器 MCP 工具保持激活。
 - 输出 Webhook seam：完整终态回复、稳定 `reply_id`、失败重投与进程恢复均不得重跑 Agent 或 MCP 工具。
 - 停止快速路径 seam：只匹配规范化后的“停”或 `stop`，绕过 Agent 并单次调用 `stop_motion`。
 
