@@ -6,6 +6,8 @@
 >
 > 实现边界：本仓库只实现 Health Webhook 接收方和 Health MCP 消费方；项圈采集、状态构建、事件生成、outbox 发送和 Health MCP Server 属于上游 `smart-neckband` 仓库。
 
+需要与上游开发逐项确认实现和联调结果时，使用 [Health MCP v0.2 双方实现核对与联调验收清单](health-mcp-v0.2-cross-team-verification-checklist.md)。
+
 ## 1. 交付范围
 
 当前实现提供：
