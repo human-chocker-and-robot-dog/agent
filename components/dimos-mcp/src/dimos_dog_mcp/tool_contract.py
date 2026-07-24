@@ -21,13 +21,9 @@ OFFICIAL_ROBOT_TOOL_NAMES = frozenset(
         "observe",
         "tag_location",
         "navigate_with_text",
-        "stop_navigation",
         "begin_exploration",
-        "end_exploration",
         "start_patrol",
-        "stop_patrol",
         "look_out_for",
-        "stop_looking_out",
     }
 )
 
@@ -35,11 +31,10 @@ CUSTOM_TOOL_NAMES = frozenset(
     {
         "move_forward",
         "move_backward",
-        "stop_motion",
         "motion_status",
         "return_to_start",
         "start_stroll",
-        "stop_stroll",
+        "stop_all",
     }
 )
 

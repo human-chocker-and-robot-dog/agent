@@ -83,10 +83,10 @@ class McpForwardingSkill(Module):
         return self._dog_tools.move_backward(speed_mps, duration_s)
 
     @skill
-    def stop_motion(self) -> str:
-        """Immediately forward a stop request; lifecycle hooks never delay it."""
+    def stop_all(self) -> str:
+        """Forward one unified stop request before any deferred hook work."""
 
-        return self._dog_tools.stop_motion()
+        return self._dog_tools.stop_all()
 
     @skill
     def motion_status(self) -> str:
@@ -180,34 +180,16 @@ class McpForwardingSkill(Module):
         return self._dog_tools.return_to_start()
 
     @skill
-    def stop_navigation(self) -> str:
-        """Cancel the active point-to-point navigation goal."""
-
-        return self._dog_tools.stop_navigation()
-
-    @skill
     def begin_exploration(self) -> str:
         """Start official DIMOS wavefront frontier exploration."""
 
         return self._dog_tools.begin_exploration()
 
     @skill
-    def end_exploration(self) -> str:
-        """Stop official DIMOS wavefront frontier exploration."""
-
-        return self._dog_tools.end_exploration()
-
-    @skill
     def start_patrol(self) -> str:
         """Start official DIMOS autonomous patrol over the known map."""
 
         return self._dog_tools.start_patrol()
-
-    @skill
-    def stop_patrol(self) -> str:
-        """Stop official DIMOS autonomous patrol."""
-
-        return self._dog_tools.stop_patrol()
 
     @skill
     def look_out_for(
@@ -220,19 +202,7 @@ class McpForwardingSkill(Module):
         return self._dog_tools.look_out_for(description_of_things, then)
 
     @skill
-    def stop_looking_out(self) -> str:
-        """Stop the active visual lookout."""
-
-        return self._dog_tools.stop_looking_out()
-
-    @skill
     def start_stroll(self) -> str:
         """Start non-exhaustive, branch-committing human-like strolling."""
 
         return self._dog_tools.start_stroll()
-
-    @skill
-    def stop_stroll(self) -> str:
-        """Stop the active human-like stroll."""
-
-        return self._dog_tools.stop_stroll()

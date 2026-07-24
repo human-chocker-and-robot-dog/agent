@@ -39,10 +39,10 @@ class DogMcpTools:
             {"speed_mps": speed_mps, "duration_s": duration_s},
         )
 
-    def stop_motion(self) -> str:
-        """Forward an immediate stop request without inserting a retry or delay."""
+    def stop_all(self) -> str:
+        """Forward one unified stop request without inserting a retry or delay."""
 
-        return self._forwarder.forward("stop_motion", {})
+        return self._forwarder.forward("stop_all", {})
 
     def motion_status(self) -> str:
         """Forward the upstream local motion-status request."""
@@ -97,30 +97,15 @@ class DogMcpTools:
 
         return self._forwarder.forward("return_to_start", {})
 
-    def stop_navigation(self) -> str:
-        """Forward cancellation of the active point-to-point navigation goal."""
-
-        return self._forwarder.forward("stop_navigation", {})
-
     def begin_exploration(self) -> str:
         """Forward startup of DIMOS wavefront frontier exploration."""
 
         return self._forwarder.forward("begin_exploration", {})
 
-    def end_exploration(self) -> str:
-        """Forward cancellation of DIMOS wavefront frontier exploration."""
-
-        return self._forwarder.forward("end_exploration", {})
-
     def start_patrol(self) -> str:
         """Forward startup of DIMOS autonomous patrol."""
 
         return self._forwarder.forward("start_patrol", {})
-
-    def stop_patrol(self) -> str:
-        """Forward cancellation of DIMOS autonomous patrol."""
-
-        return self._forwarder.forward("stop_patrol", {})
 
     def look_out_for(
         self,
@@ -132,11 +117,5 @@ class DogMcpTools:
             {"description_of_things": description_of_things, "then": then},
         )
 
-    def stop_looking_out(self) -> str:
-        return self._forwarder.forward("stop_looking_out", {})
-
     def start_stroll(self) -> str:
         return self._forwarder.forward("start_stroll", {})
-
-    def stop_stroll(self) -> str:
-        return self._forwarder.forward("stop_stroll", {})

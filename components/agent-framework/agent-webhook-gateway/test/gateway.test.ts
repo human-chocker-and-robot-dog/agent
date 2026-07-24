@@ -245,7 +245,7 @@ describe("Agent input and final reply webhook", () => {
 		await submit("busy", "解释一下状态");
 		await submit("stop", " STOP！ ");
 		await waitFor(() => toolCalls.length === 1);
-		expect(toolCalls).toEqual(["stop_motion"]);
+		expect(toolCalls).toEqual(["stop_all"]);
 		await waitFor(() => replies.some((reply) => reply.instruction_id === "stop"));
 		expect(replies.find((reply) => reply.instruction_id === "stop")?.text).toBe("已发送停止指令。");
 
@@ -253,7 +253,7 @@ describe("Agent input and final reply webhook", () => {
 		await service.close();
 	});
 
-	it("uses the fixed failure reply when stop_motion is not accepted", async () => {
+	it("uses the fixed failure reply when stop_all is not accepted", async () => {
 		const directory = mkdtempSync(join(tmpdir(), "agent-webhook-gateway-"));
 		directories.push(directory);
 		const replies: string[] = [];

@@ -43,22 +43,21 @@ claude mcp add --transport http --scope project dimos-dog-wrapper http://127.0.0
 
 ## 工具
 
-包装器暴露与上游同名的全部 25 个工具，并将参数不变地单次转发：
+包装器暴露与上游同名的全部 20 个工具，并将参数不变地单次转发：
 
 | 工具 | 上游工具 | 说明 |
 | --- | --- | --- |
 | `move_forward` | `move_forward` | 转发前进速度和持续时间。 |
 | `move_backward` | `move_backward` | 转发后退速度和持续时间。 |
-| `stop_motion` | `stop_motion` | 立即转发停止，不重试。 |
+| `stop_all` | `stop_all` | 单次转发统一停止，不重试；逐项停止由底层编排。 |
 | `motion_status` | `motion_status` | 转发上游本地运动状态。 |
-| 18 个 DiMOS 官方工具 | 同名官方工具 | 按 DiMOS `0.0.14b1` 官方签名转发管理、移动、状态、导航和感知能力；不暴露 `speak`、`follow_person`、`stop_following`。 |
+| 14 个 DiMOS 官方工具 | 同名官方工具 | 按 DiMOS `0.0.14b1` 官方签名转发管理、移动、状态、导航和感知能力；不暴露语音、人员跟随或专项停止工具。 |
 | `return_to_start` | `return_to_start` | 转发返回本次下层进程启动位置的请求。 |
 | `start_stroll` | `start_stroll` | 启动随机选支、非覆盖式的人类式散步。 |
-| `stop_stroll` | `stop_stroll` | 停止散步。 |
 
 速度、持续时间、dry-run/Go2 模式、最终零速度停止、官方能力和散步算法均由上游 `dimos-dog-mcp` 负责。包装器不连接硬件、不运行路径规划，也不伪造遥测。dry-run 的硬件能力错误会按普通上游错误触发 `after_error`。
 
-包装器 endpoint 公开上述完整 25 工具。所有工具均通过同一个 `ForwardingService`，所以都支持同时配置四种 hook。被底层排除的人员跟随工具不会由包装器重新声明或转发。
+包装器 endpoint 公开上述完整 20 工具。所有工具均通过同一个 `ForwardingService`，所以都支持同时配置四种 hook。被底层排除的人员跟随和专项停止工具不会由包装器重新声明或转发。
 
 ## 配置
 
@@ -70,7 +69,7 @@ claude mcp add --transport http --scope project dimos-dog-wrapper http://127.0.0
 
 上游请求采用一条标准 JSON-RPC `tools/call` HTTP POST。网络失败、HTTP 失败或 MCP 错误会返回给调用方；包装器不会自动重试运动类命令。
 
-底层参数或互斥错误使用 `{"status":"error","error":"..."}` 文本 envelope。包装器还识别 DIMOS 原生 Server 将意外异常包装成的 `Error running tool '...'` 文本；两类结果都会抛出上游错误并触发 `after_error`，不会触发 `after_success`。
+底层参数或互斥错误使用 `{"status":"error","error":"..."}` 文本 envelope。包装器还识别 DIMOS 原生 Server 将意外异常包装成的 `Error running tool '...'` 文本；两类结果都会抛出上游错误并触发 `after_error`，不会触发 `after_success`。结构化错误的完整文本保留在异常消息中，因此 `stop_all` 的失败组件和逐项结果仍可由上层或 hook 读取。
 
 ## Hook
 
@@ -81,7 +80,7 @@ claude mcp add --transport http --scope project dimos-dog-wrapper http://127.0.0
 - `after_error`
 - `finally`
 
-`before_call` 仅表示事件已入队，不是拦截器：上游调用不会等待 hook 执行。hook 无法改写转发参数；hook 抛出的异常只记录日志，不会改变上游请求、结果或错误。尤其是 `stop_motion` 会直接转发，hook 不得延迟或重试它。
+`before_call` 仅表示事件已入队，不是拦截器：上游调用不会等待 hook 执行。hook 无法改写转发参数；hook 抛出的异常只记录日志，不会改变上游请求、结果或错误。尤其是 `stop_all` 会直接、单次转发，hook 不得延迟、拆分或重试它。
 
 要加入一个已确定传输方式的 hook，可由 Python 入口组合：
 

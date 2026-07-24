@@ -120,7 +120,7 @@ class MotionRuntime:
         )
         with self._lock:
             if self._active is not None:
-                raise MotionBusyError("A movement command is already active; call stop_motion first")
+                raise MotionBusyError("A movement command is already active; call stop_all first")
             self._active = active
         return active
 

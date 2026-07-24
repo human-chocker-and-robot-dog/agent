@@ -75,7 +75,7 @@ class DogMotionSkill(Module):
 
         return self._move("backward", -1.0, speed_mps, duration_s)
 
-    @skill
+    @rpc
     def stop_motion(self) -> str:
         """Immediately cancel local motion and publish a zero ``cmd_vel`` command.
 
@@ -127,7 +127,7 @@ class DogMotionSkill(Module):
             message = "No hardware connection was started and no non-zero cmd_vel was published."
         else:
             status = "started"
-            message = "Call stop_motion to stop before the requested duration expires."
+            message = "Call stop_all to stop before the requested duration expires."
         return json.dumps(
             {
                 "status": status,

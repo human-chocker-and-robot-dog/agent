@@ -285,11 +285,11 @@ export async function runDryRunDemo(): Promise<DryRunDemoSummary> {
 		equal(stopReply.text, STOP_REPLY_TEXT);
 		deepStrictEqual(
 			wrapperCalls.map((call) => call.name),
-			["move_forward", "stop_motion"],
+			["move_forward", "stop_all"],
 		);
 		deepStrictEqual(
 			dogCalls.map((call) => call.name),
-			["move_forward", "stop_motion"],
+			["move_forward", "stop_all"],
 		);
 		deepStrictEqual(wrapperCalls, dogCalls);
 		deepStrictEqual(wrapperCalls[0]?.arguments, { speed_mps: 0.1, duration_s: 0.01 });

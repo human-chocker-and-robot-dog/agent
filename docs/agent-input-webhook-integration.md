@@ -28,7 +28,7 @@
 3. 对相同 `instruction_id` 和相同 `text` 的重投做幂等去重。
 4. 拒绝相同 `instruction_id` 对应不同 `text` 的冲突请求。
 5. 将普通输入按持久化受理顺序串行交给一个固定 Pi Agent 会话。
-6. 只向该 Agent 暴露固定的 25 个机器狗 MCP 工具，并关闭 Pi 内建编码工具。
+6. 只向该 Agent 暴露固定的 20 个机器狗 MCP 工具，并关闭 Pi 内建编码工具。
 7. 将规范化后精确等于“停”或 `stop` 的文本作为停止快速路径处理。
 8. 将 Agent 最终回复或固定失败文本持久化到 outbox。
 9. 通过部署级回复 Webhook 发送完整的最终用户可见文本。
@@ -76,7 +76,7 @@ flowchart LR
     I["输入端<br/>确认完整真实用户请求"] -->|"POST /v1/instructions"| G["Agent Webhook Gateway"]
     G --> Q["SQLite inbox"]
     Q -->|"普通输入 FIFO"| A["固定 Pi Agent 会话"]
-    Q -->|"精确停止口令快速路径"| S["stop_motion 调用"]
+    Q -->|"精确停止口令快速路径"| S["stop_all 调用"]
     A -->|"HTTP JSON-RPC tools/call"| W["DIMOS MCP wrapper :9991/mcp"]
     S -->|"HTTP JSON-RPC tools/call"| W
     W --> D["机器狗 MCP :9990/mcp"]
@@ -91,8 +91,8 @@ flowchart LR
 | 输入端 | 麦克风、唤醒、ASR、分段、确认一次完整真实请求、生成并持久化 `instruction_id`、提交和重试。 | 不直接调用 MCP，不指定 Agent 会话，不解释 `202` 为动作成功。 |
 | Agent Webhook Gateway | HTTP 校验、inbox/outbox、幂等、调度、固定 Agent 会话、停止快速路径和回复重投。 | 不采集音频，不判断一次 Webhook 是否是真实请求，不提供认证，不提供物理急停。 |
 | 固定 Pi Agent | 接收普通用户文本，根据系统提示词选择最终回复和 MCP 工具调用。 | 不接收外部会话 ID，不启用 Pi 内建编码工具、skills、extensions 或 context files。 |
-| MCP 包装器 | 将 DiMOS `0.0.14b1` 中除 `speak`、`follow_person`、`stop_following` 外的 18 个官方工具和 7 个自研工具单次转发到机器狗 MCP，并执行旁路生命周期 hook。 | 不接收用户自然语言，不重复运动命令，不承担 Webhook 回复投递。 |
-| 机器狗 MCP | 暴露版本化的 25 工具契约，验证自研运动参数，并在 dry-run 或 Go2 模式执行官方能力与导航扩展。 | 不生成用户回复，不接收 `instruction_id`，不运行 OpenAI TTS 或需要 `ALIBABA_API_KEY` 的人员跟随。 |
+| MCP 包装器 | 将 DiMOS `0.0.14b1` 的 14 个非停止官方工具和 6 个自研工具单次转发到机器狗 MCP，并执行旁路生命周期 hook。 | 不接收用户自然语言，不重复运动命令，不承担 Webhook 回复投递。 |
+| 机器狗 MCP | 暴露版本化的 20 工具契约，验证自研运动参数，并在 dry-run 或 Go2 模式执行官方能力、导航扩展和统一停止编排。 | 不生成用户回复，不接收 `instruction_id`，不运行 OpenAI TTS 或需要 `ALIBABA_API_KEY` 的人员跟随。 |
 | 回复接收端 | 持久化并按 `reply_id` 去重，向最终用户显示或通过 TTS 朗读 `text`。 | 不期待模型 token、工具结果、内部错误或独立失败事件。 |
 
 ## 4. 输入端 HTTP 契约
@@ -303,13 +303,13 @@ HTTP `202` 只会在 `acceptInstruction` 完成后发送。
 - context files
 - Pi 内建编码工具
 
-当前只注册并保持激活以下 25 个自定义工具。它们全部向包装器发送一次同名 `tools/call`：
+当前只注册并保持激活以下 20 个自定义工具。它们全部向包装器发送一次同名 `tools/call`：
 
 | 工具 | 参数 | Gateway 到包装器的行为 |
 | --- | --- | --- |
 | `move_forward` | `speed_mps: number`、`duration_s: number` | 单次调用包装器同名工具。两个值在工具 schema 中必须大于 0。 |
 | `move_backward` | `speed_mps: number`、`duration_s: number` | 单次调用包装器同名工具。两个值在工具 schema 中必须大于 0。 |
-| `stop_motion` | 无 | 单次调用包装器同名工具。 |
+| `stop_all` | 无 | 单次调用包装器同名工具；逐项停止由底层机器狗 MCP 执行。 |
 | `motion_status` | 无 | 单次调用包装器同名工具。 |
 | `server_status` | 无 | 查询下层 DiMOS MCP 状态。 |
 | `list_modules` | 无 | 查询下层已部署模块和工具。 |
@@ -323,15 +323,10 @@ HTTP `202` 只会在 `acceptInstruction` 完成后发送。
 | `tag_location` | `location_name: string` | 命名当前地图位置。 |
 | `navigate_with_text` | `query: string` | 以自然语言目的地启动官方导航。 |
 | `return_to_start` | 无 | 返回本次下层进程捕获的第一帧有效里程计位置。 |
-| `stop_navigation` | 无 | 停止定点导航。 |
 | `begin_exploration` | 无 | 启动覆盖式 Frontier 探索。 |
-| `end_exploration` | 无 | 停止覆盖式探索。 |
 | `start_patrol` | 无 | 在已建图区域启动官方覆盖巡逻。 |
-| `stop_patrol` | 无 | 停止巡逻。 |
 | `look_out_for` | `description_of_things: string[]`、可选 `then` | 持续查找目标，可在发现后调用另一工具。 |
-| `stop_looking_out` | 无 | 停止视觉查找。 |
 | `start_stroll` | 无 | 启动随机选支、不回头补覆盖的人类式散步。 |
-| `stop_stroll` | 无 | 停止散步。 |
 
 网关不会自动重试任何 MCP 工具调用。
 
@@ -400,18 +395,18 @@ HTTP `202` 只会在 `acceptInstruction` 完成后发送。
 - 它不会进入 Pi Agent 会话。
 - 它使用独立的停止队列。
 - 它不等待正在进行的普通 Agent 回合。
-- 它向 MCP 包装器单次调用 `stop_motion`。
+- 它向 MCP 包装器单次调用 `stop_all`。
 - 多个停止事件之间仍按各自的持久化顺序串行处理。
 
-当 MCP 调用未抛出错误、HTTP 响应成功且 MCP `result.isError` 不为 `true` 时，回复固定为：
+当 MCP 调用未抛出错误、HTTP 响应成功、MCP `result.isError` 不为 `true`，且结构化文本结果未标记 `status: "error"` 时，回复固定为：
 
 ```text
 已发送停止指令。
 ```
 
-这句话只表示包装器接受了该 MCP 调用结果，不表示已经从机器狗遥测确认物理静止。
+这句话只表示底层完成了 `stop_all` 的全部停止尝试且未报告失败组件，不表示已经从机器狗遥测确认物理静止。
 
-当请求超时、HTTP 失败、JSON-RPC error、MCP `result.isError: true` 或响应结构不合法时，回复固定为：
+当请求超时、HTTP 失败、JSON-RPC error、MCP `result.isError: true`、结构化文本结果为 `status: "error"` 或响应结构不合法时，回复固定为：
 
 ```text
 暂时无法完成此请求，请稍后重试。
@@ -451,14 +446,14 @@ HTTP `202` 只会在 `acceptInstruction` 完成后发送。
 - 当前不添加硬编码速度或时长上限，也不得擅自修改用户明确指定的数值。
 - 距离运动只是定时速度估算，不是定位控制。
 - 最终回复不得声称已经精确移动或到达指定距离。
-- 覆盖探索、已建图巡逻和非覆盖式散步必须使用各自独立的工具与停止工具，不得混用。
+- 覆盖探索、已建图巡逻和非覆盖式散步必须使用各自独立的启动工具；停止统一使用 `stop_all`。
 
 ### 7.2 当前保证边界
 
 上述自然语言语义目前只存在于：
 
 - Agent 系统提示词；
-- 25 个工具的名称、描述和 TypeBox 参数 schema。
+- 20 个工具的名称、描述和 TypeBox 参数 schema。
 
 当前不存在：
 
@@ -638,7 +633,7 @@ Content-Type: application/json; charset=utf-8
 | 持久化状态 | 启动后的行为 |
 | --- | --- |
 | `pending` 普通输入 | 按原 `sequence` 继续交给固定 Agent。 |
-| `pending` 停止输入 | 由停止队列继续调用一次 `stop_motion`。 |
+| `pending` 停止输入 | 由停止队列继续调用一次 `stop_all`。 |
 | `processing` 输入 | 不重新运行 Agent 或 MCP；直接创建固定失败回复并进入 outbox。 |
 | `completed` 且回复未确认 | 按持久化的下一次尝试时间继续回调。 |
 | `completed` 且回复已确认 | 不再投递。 |
@@ -896,8 +891,8 @@ npx tsc -p tsconfig.json --noEmit
 
 当前结果：
 
-- 4 个测试文件通过。
-- 18 个测试通过。
+- 5 个测试文件通过。
+- 19 个测试通过。
 - TypeScript 类型检查通过。
 
 自动化测试已覆盖：
@@ -916,7 +911,7 @@ npx tsc -p tsconfig.json --noEmit
 - MCP `result.isError` 被识别为失败。
 - DIMOS 异常文本和结构化工具错误被识别为失败。
 - 系统提示词包含“最终输出会直接发给用户”和运动语义。
-- 固定 Agent 只激活版本化的 25 个机器狗工具。
+- 固定 Agent 只激活版本化的 20 个机器狗工具。
 - 必填回复 URL 和主要默认配置。
 
 当前自动化测试没有覆盖：
@@ -961,8 +956,8 @@ npx tsc -p tsconfig.json --noEmit
 - [ ] Pi 模型和认证在 `AGENT_WEBHOOK_AGENT_DIR` 中有效。
 - [ ] 包装器 MCP 可从网关主机访问。
 - [ ] 机器狗 MCP 初次联调运行在 dry-run。
-- [ ] `tools/list` 在底层和包装器均精确返回版本化的 25 个工具，且不包含 `speak`、`follow_person`、`stop_following`。
-- [ ] 25 个工具在真实包装器链路上保持同名、同参数、单次转发。
+- [ ] `tools/list` 在底层和包装器均精确返回版本化的 20 个工具，且不包含 `speak`、人员跟随或专项停止工具。
+- [ ] 20 个工具在真实包装器链路上保持同名、同参数、单次转发。
 - [ ] 每个工具调用只到达下游一次。
 - [ ] “停”、“停。”、“ STOP ”和“stop!”绕过 Agent。
 - [ ] “别停”、“停止”、“请停下来”和“stop now”不会误入快速路径。
@@ -980,7 +975,7 @@ npx tsc -p tsconfig.json --noEmit
 - [ ] “1 秒”“以 0.1 米每秒走”和“走一点”只追问，不调用运动工具。
 - [ ] 左、右、转向不会被错误映射为前进或后退。
 - [ ] “探索未知区域”“已建图巡逻”“像人一样散步”分别调用 `begin_exploration`、`start_patrol`、`start_stroll`。
-- [ ] 停止三种后台行为时分别调用 `end_exploration`、`stop_patrol`、`stop_stroll`。
+- [ ] 停止任意后台行为时只调用 `stop_all`，不调用专项停止工具。
 - [ ] 最终回复不声称已经精确到达指定距离。
 - [ ] 最终回复直接面向用户，不包含内部推理、工具结构或异常堆栈。
 

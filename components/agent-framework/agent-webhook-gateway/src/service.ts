@@ -114,7 +114,7 @@ export class AgentWebhookService {
 					}
 					let replyText = STOP_ACCEPTED_REPLY_TEXT;
 					try {
-						await this.mcp.callTool("stop_motion", {});
+						await this.mcp.callTool("stop_all", {});
 					} catch {
 						replyText = FAILURE_REPLY_TEXT;
 					}

@@ -4,7 +4,7 @@
 
 开始使用前，先阅读根目录的 [CONTEXT.md](CONTEXT.md)。它定义了安全边界和不可违反的架构约束；本文件定义安装、接入和开发流程。
 
-输入端系统向 Agent 输入用户文本、并由回复接收端接收最终回复时，遵循 [Agent 输入与最终回复 Webhook 对接指南](docs/agent-input-webhook-integration.md)。输入端负责确认每个 Webhook 都是完整真实请求；本框架不处理麦克风或语音识别。`components/agent-framework/agent-webhook-gateway` 已实现持久化输入网关、固定 Pi Agent 会话和输出投递器：Agent 无法完成时返回固定的用户可见文本，便于回复接收端直接显示或 TTS 朗读；系统提示词要求模型对参数不明确的运动请求追问，并支持“速度加时长”“距离加时长”或仅说距离，方向可选且默认向前，其中距离仅按部署标定速度进行估算。Agent 可调用锁定版 DiMOS 中除 `speak`、`follow_person`、`stop_following` 外的 18 个官方 MCP 工具，并额外支持非穷举的人类式自主散步。官方 `speak` 不在本项目契约中；最终用户语音由回复接收端负责，底层不需要 OpenAI TTS 凭据。官方人员跟随工具也不在契约中，因为它们要求本项目不支持的 `ALIBABA_API_KEY`。该自然语言语义目前没有程序级策略门，不能当作确定性安全保证。规范化后精确等于“停”或 `stop` 的语音停止口令会由代码绕过 Agent 并直接触发 `stop_motion`，被 MCP 接受后返回“已发送停止指令。”，但不替代物理急停，也不取消官方导航、探索、巡逻或散步后台任务。不要把 MCP 端点当作文本输入端点。
+输入端系统向 Agent 输入用户文本、并由回复接收端接收最终回复时，遵循 [Agent 输入与最终回复 Webhook 对接指南](docs/agent-input-webhook-integration.md)。输入端负责确认每个 Webhook 都是完整真实请求；本框架不处理麦克风或语音识别。`components/agent-framework/agent-webhook-gateway` 已实现持久化输入网关、固定 Pi Agent 会话和输出投递器：Agent 无法完成时返回固定的用户可见文本，便于回复接收端直接显示或 TTS 朗读；系统提示词要求模型对参数不明确的运动请求追问，并支持“速度加时长”“距离加时长”或仅说距离，方向可选且默认向前，其中距离仅按部署标定速度进行估算。Agent 可调用锁定版 DiMOS 的 14 个非停止官方 MCP 工具及 6 个自研工具。官方 `speak`、人员跟随及各专项停止工具不在公开契约中：最终用户语音由回复接收端负责，底层不需要 OpenAI TTS 凭据；人员跟随要求本项目不支持的 `ALIBABA_API_KEY`；停止统一使用 `stop_all`。该自然语言语义目前没有程序级策略门，不能当作确定性安全保证。规范化后精确等于“停”或 `stop` 的语音停止口令会由代码绕过 Agent 并直接触发 `stop_all`，被 MCP 接受后返回“已发送停止指令。”。`stop_all` 会尝试停止定时速度、定点导航、探索、巡逻、散步和持续视觉查找，但仍不等同于物理急停。不要把 MCP 端点当作文本输入端点。
 
 ## 架构与职责
 
@@ -25,7 +25,7 @@ flowchart LR
 | 上层 | MCP Host / Agent | 需要 hook 或 Agent Gateway 时连接包装器；独立 MCP Host 也可直接连接底层。 |
 | Agent Webhook 层 | `components/agent-framework/agent-webhook-gateway` | 持久化用户文本、串行运行固定 Agent 会话并投递最终回复。 |
 | 转发层 | `components/agent-framework/dimos-mcp-wrapper` | 原样、单次转发工具调用；可发出非阻塞 hook 事件。 |
-| 下层 | `components/dimos-mcp` | 部署在机器狗侧主机，公开 18 个受支持的 DiMOS `0.0.14b1` 官方工具与 7 个自研工具；Go2 模式组合官方空间、导航和机器人技能及自研导航扩展，但不运行模型、Agent 循环、云端 TTS 或人员跟随。 |
+| 下层 | `components/dimos-mcp` | 部署在机器狗侧主机，公开 14 个受支持的 DiMOS `0.0.14b1` 官方工具与 6 个自研工具；Go2 模式组合官方空间、导航和机器人技能及自研导航扩展，但不运行模型、Agent 循环、云端 TTS 或人员跟随。 |
 | 硬件层 | DIMOS 连接与导航模块 | dry-run 只模拟定时运动；显式 Go2 模式消费传感器与 `cmd_vel` 并执行官方导航。 |
 
 Agent Webhook Gateway 不应直接连接底层机器狗 MCP，否则会绕过包装器的统一转发点和 hook 扩展点。明确不需要 hook 的独立 MCP Host 可以直接连接 `components/dimos-mcp` 暴露的网络 endpoint。
@@ -82,18 +82,18 @@ dimos-dog-mcp
 
 假设底层机器 IP 为 `192.168.66.160`，上层调用 URL 是 `http://192.168.66.160:9990/mcp`。`0.0.0.0` 只用于监听，不能作为客户端 URL。底层主机防火墙应只允许上层机器或受信任网段访问 TCP 9990。
 
-下层公开固定的 25 个工具：DiMOS `0.0.14b1` 中除 `speak`、`follow_person`、`stop_following` 外的 18 个官方工具，加上本项目的 7 个自研工具。4 个定时运动工具在 dry-run 和 Go2 模式均可调用：
+下层公开固定的 20 个工具：DiMOS `0.0.14b1` 的 14 个非停止官方工具，加上本项目的 6 个自研工具。4 个基础控制工具在 dry-run 和 Go2 模式均可调用：
 
 | 工具 | 参数 | 行为 |
 | --- | --- | --- |
 | `move_forward` | `speed_mps`、`duration_s` | 按给定时长前进，结束时发布零速度。 |
 | `move_backward` | `speed_mps`、`duration_s` | 按给定时长后退，结束时发布零速度。 |
-| `stop_motion` | 无 | 取消当前本地运动并立即发布零速度。 |
+| `stop_all` | 无 | 尝试停止定时速度、定点导航、探索、巡逻、散步和持续视觉查找；无论中间项是否失败，最后都尝试发布零速度。 |
 | `motion_status` | 无 | 返回本地命令执行状态，不是机器狗遥测。 |
 
 运动速度和持续时间接受用户提供的任意正有限数值，不设置硬编码范围上限或下限。默认值分别为 0.10 m/s 和 1.0 秒；重叠的运动请求仍会被拒绝。
 
-18 个受支持的官方工具如下。`server_status`、`list_modules`、`agent_send` 来自官方 `McpServer`；其余硬件或机器人能力只在 Go2 模式真实执行：
+14 个受支持的官方工具如下。`server_status`、`list_modules`、`agent_send` 来自官方 `McpServer`；其余硬件或机器人能力只在 Go2 模式真实执行：
 
 | 工具 | 参数 | 行为 |
 | --- | --- | --- |
@@ -108,25 +108,20 @@ dimos-dog-mcp
 | `observe` | 无 | 获取 Go2 当前相机观察。 |
 | `tag_location` | `location_name` | 将当前地图位置保存为具名地点。 |
 | `navigate_with_text` | `query` | 解析自然语言目的地，并通过 DIMOS `ReplanningAStarPlanner` 导航。 |
-| `stop_navigation` | 无 | 取消当前定点导航目标。 |
 | `begin_exploration` | 无 | 启动 DIMOS Wavefront Frontier 未知区域探索。 |
-| `end_exploration` | 无 | 停止当前探索。 |
 | `start_patrol` | 无 | 在已经建图的区域按官方覆盖路由启动自主巡逻。 |
-| `stop_patrol` | 无 | 停止当前巡逻。 |
 | `look_out_for` | `description_of_things`、可选 `then` | 持续视觉查找目标；无 `then` 时通过 MCP 工具流通知上层，带 `then` 时经本机 MCP 调用指定的公开工具。 |
-| `stop_looking_out` | 无 | 停止持续视觉查找。 |
-另外两个自研工具用于人类式散步：
+另一个自研工具用于人类式散步：
 
 | 工具 | 参数 | 行为 |
 | --- | --- | --- |
 | `start_stroll` | 无 | 使用官方 Frontier 检测和导航，在每个局部未知分支中随机选择一条并放弃其他分支；保持方向惯性，不回头补覆盖。 |
-| `stop_stroll` | 无 | 停止当前散步。 |
 
 `start_stroll` 不等于官方 `start_patrol`。巡逻只在已经建图的区域按覆盖路线来回巡视；散步面向未知道路，故意遗漏未选分支，并在没有顺向候选时结束。它也不等于 `begin_exploration`，因为它不追求完成地图覆盖。
 
-第七个自研工具 `return_to_start` 无参数：它导航回本次下层进程捕获的第一帧有效里程计位置，20 厘米内直接报告已在起点。它不是官方工具，也不依赖手工 `tag_location`。
+第六个自研工具 `return_to_start` 无参数：它导航回本次下层进程捕获的第一帧有效里程计位置，20 厘米内直接报告已在起点。它不是官方工具，也不依赖手工 `tag_location`。
 
-dry-run 的 `tools/list` 仍返回完整 25 个工具，以保持上下层契约稳定。官方硬件能力、`return_to_start` 以及两个散步工具在 dry-run 调用时返回 `{"status":"error",...,"required_mode":"go2"}`，不会伪造遥测、感知、地图、路径或动作；三个官方 MCP 管理工具仍返回本地服务信息。`follow_person` 和 `stop_following` 在任何模式下都不公开，不是 dry-run 占位工具。
+dry-run 的 `tools/list` 仍返回完整 20 个工具，以保持上下层契约稳定。官方硬件能力、`return_to_start` 和 `start_stroll` 在 dry-run 调用时返回 `{"status":"error",...,"required_mode":"go2"}`，不会伪造遥测、感知、地图、路径或动作；三个官方 MCP 管理工具仍返回本地服务信息。`stop_all` 在 dry-run 中只停止本地定时速度执行器，其他活动在结构化结果中标记为 `not_configured`。专项停止能力仍作为底层内部 RPC 保留，供 `stop_all` 编排，但不会出现在 `tools/list`。`speak`、`follow_person`、`stop_following` 及各专项停止工具在任何模式下都不公开。
 
 ### 3. 启用真实 Unitree Go2（可选）
 
@@ -145,7 +140,7 @@ Go2 模式组合 DiMOS 官方 `unitree_go2_spatial` Blueprint、`NavigationSkill
 
 ### 4. 使用本机 Python GUI（可选）
 
-`dimos-dog-gui` 是一个独立 MCP Host，不绕过下层服务，也不直接使用 Go2 SDK。它默认连接 `http://127.0.0.1:9990/mcp`，界面可修改为另一个受信任 endpoint。输入速度（m/s）和持续时间（s）后，前进和后退按钮各发送一次同名 `tools/call`；停止按钮只发送一次 `stop_motion`，不自动重试。
+`dimos-dog-gui` 是一个独立 MCP Host，不绕过下层服务，也不直接使用 Go2 SDK。它默认连接 `http://127.0.0.1:9990/mcp`，界面可修改为另一个受信任 endpoint。输入速度（m/s）和持续时间（s）后，前进和后退按钮各发送一次同名 `tools/call`；“全部停止”按钮只发送一次 `stop_all`，不自动重试。
 
 在 WSLg 或其他可显示 Tkinter 窗口的 Linux 图形会话中，使用已安装 `dimos-dog-mcp` 的 Python 环境运行：
 
@@ -198,9 +193,9 @@ dimos-mcp-wrapper
 
 包装器只会对每个上层调用发送一次标准 JSON-RPC `tools/call` 请求。网络错误、HTTP 错误或下层 MCP 错误会返回给上层；它不会自动重试任何运动命令。
 
-包装器 `tools/list` 返回上述全部 25 个工具，包括 18 个受支持的锁定版官方工具。每个工具都经同一个 `ForwardingService` 单次转发，因此均支持同时配置 `before_call`、`after_success`、`after_error` 和 `finally` hook。
+包装器 `tools/list` 返回上述全部 20 个工具，包括 14 个受支持的锁定版官方工具。每个工具都经同一个 `ForwardingService` 单次转发，因此均支持同时配置 `before_call`、`after_success`、`after_error` 和 `finally` hook。`stop_all` 在包装器中仍只是一个同名、无参数的单次转发；它不会在包装器内拆成多个上游调用。
 
-底层可预期的参数或运动互斥错误使用 `{"status":"error","error":"..."}` 文本 envelope。包装器也识别 DIMOS 对意外异常生成的 `Error running tool '...'` 文本，并将两者都转为上层失败及 `after_error` hook，而不是 `after_success`。
+底层可预期的参数或运动互斥错误使用 `{"status":"error","error":"..."}` 文本 envelope。包装器也识别 DIMOS 对意外异常生成的 `Error running tool '...'` 文本，并将两者都转为上层失败及 `after_error` hook，而不是 `after_success`；结构化错误的完整上游文本会保留在错误消息中，因此 `stop_all` 的 `failed_components` 和逐项 `results` 不会在包装层丢失。
 
 ## 接入上层 Agent 或 MCP Host
 
@@ -222,27 +217,23 @@ claude mcp add --transport http --scope project dimos-dog-wrapper http://127.0.0
 | --- | --- | --- |
 | `move_forward` | `speed_mps`、`duration_s` | 原样传给下层 `move_forward`。 |
 | `move_backward` | `speed_mps`、`duration_s` | 原样传给下层 `move_backward`。 |
-| `stop_motion` | 无 | 立即传给下层，不等待或重试 hook。 |
+| `stop_all` | 无 | 单次、立即传给下层；由下层统一停止所有活动，不等待或重试 hook。 |
 | `motion_status` | 无 | 原样返回下层的本地运动状态。 |
 | `return_to_start` | 无 | 返回本次下层进程捕获的启动位置。 |
-| 18 个受支持的官方工具 | 与 DiMOS `0.0.14b1` 官方签名相同 | 除 `speak`、`follow_person`、`stop_following` 外，同名、同参数、单次转发到下层。 |
+| 14 个受支持的官方工具 | 与 DiMOS `0.0.14b1` 官方签名相同 | 同名、同参数、单次转发到下层。 |
 | `tag_location` | `location_name` | 原样传给下层 `tag_location`。 |
 | `navigate_with_text` | `query` | 原样传给下层 `navigate_with_text`。 |
-| `stop_navigation` | 无 | 取消当前定点导航。 |
 | `begin_exploration` | 无 | 启动 Frontier 探索。 |
-| `end_exploration` | 无 | 停止 Frontier 探索。 |
 | `start_patrol` | 无 | 启动已知地图巡逻。 |
-| `stop_patrol` | 无 | 停止已知地图巡逻。 |
 | `start_stroll` | 无 | 启动随机选支、非覆盖式的人类式散步。 |
-| `stop_stroll` | 无 | 停止人类式散步。 |
 
 建议的上层使用顺序：
 
 1. 首次接入时保持下层 dry-run，先调用 `motion_status`，再按预期参数发起前进或后退请求。
-2. 需要提前结束动作时，调用 `stop_motion`；不要依赖断开 MCP 客户端连接来停止机器狗。
-3. 实机环境中不要并发发起运动工具调用。收到“动作正在进行”的错误后，先调用 `stop_motion` 或等待当前动作结束。
+2. 需要提前结束任何动作或后台行为时，调用 `stop_all`；不要依赖断开 MCP 客户端连接来停止机器狗。
+3. 实机环境中不要并发发起运动工具调用。收到“动作正在进行”的错误后，先调用 `stop_all` 或等待当前动作结束。
 4. `motion_status` 只描述本地命令执行器，不可当作定位、电量、姿态或碰撞传感器数据。
-5. 需要提前结束后台行为时，根据当前行为调用 `stop_navigation`、`end_exploration`、`stop_patrol`、`stop_stroll` 或 `stop_looking_out`。`stop_motion` 只终止定时速度动作。
+5. `stop_all` 会依次尝试终止探索、巡逻、散步、持续视觉查找、定点导航和本地定时速度；某一项失败不会阻止后续停止动作。返回 `status=error` 时应检查 `failed_components` 和逐项 `results`，不得声称机器狗已完全静止。
 6. `begin_exploration` 面向未知区域覆盖建图；`start_patrol` 面向已知地图覆盖巡视；`start_stroll` 面向未知道路随机选支且不补遗漏。三个移动生命周期不能同时运行。
 
 不需要包装器 hook 的独立 MCP Host 也可以直接连接底层机器的 `http://<底层机器IP>:9990/mcp`。Agent Webhook Gateway 当前仍按既定架构连接包装器，不直接连接底层。
@@ -354,7 +345,8 @@ ModuleCoordinator.build(build_blueprint(hooks=(AuditHook(), MetricsHook()))).loo
 | 下层网络与运行模式配置 | `components/dimos-mcp/src/dimos_dog_mcp/config.py` |
 | 下层运动状态机与安全边界 | `components/dimos-mcp/src/dimos_dog_mcp/motion_runtime.py` |
 | 下层公开导航契约与 dry-run 行为 | `components/dimos-mcp/src/dimos_dog_mcp/navigation.py` |
-| 版本化的 25 工具公开契约 | `components/dimos-mcp/src/dimos_dog_mcp/tool_contract.py` |
+| 版本化的 20 工具公开契约 | `components/dimos-mcp/src/dimos_dog_mcp/tool_contract.py` |
+| 统一停止编排 | `components/dimos-mcp/src/dimos_dog_mcp/stop.py`、`components/dimos-mcp/src/dimos_dog_mcp/go2_stop.py` |
 | 官方视觉回调的无模型 AgentSpec 适配 | `components/dimos-mcp/src/dimos_dog_mcp/agent_bridge.py` |
 | 人类式散步分支策略与 Go2 技能 | `components/dimos-mcp/src/dimos_dog_mcp/stroll_policy.py`、`components/dimos-mcp/src/dimos_dog_mcp/stroll.py` |
 | 下层 MCP 工具公开白名单 | `components/dimos-mcp/src/dimos_dog_mcp/server.py` |
@@ -388,7 +380,7 @@ npm ci --ignore-scripts
 npm run demo:dry-run
 ~~~
 
-该演示使用真实网关核心、临时 SQLite 和临时 HTTP 端口，替身化固定 Agent、`dimos-mcp-wrapper`、`dimos-dog-mcp` 与回复接收端；它不会导入 DIMOS 或访问机器狗。命令会断言最终回调、`move_forward`/`stop_motion` 在包装器及底层各调用一次，以及停止口令在普通 Agent 请求仍被阻塞时先完成回调。相同场景已纳入网关的 `npm test`。
+该演示使用真实网关核心、临时 SQLite 和临时 HTTP 端口，替身化固定 Agent、`dimos-mcp-wrapper`、`dimos-dog-mcp` 与回复接收端；它不会导入 DIMOS 或访问机器狗。命令会断言最终回调、`move_forward`/`stop_all` 在包装器及底层各调用一次，以及停止口令在普通 Agent 请求仍被阻塞时先完成回调。相同场景已纳入网关的 `npm test`。
 
 ## 常见问题
 
@@ -401,8 +393,8 @@ npm run demo:dry-run
 | 官方硬件工具或散步工具返回 `required_mode=go2` | 当前下层是 dry-run；完成实机预检并安装 `[go2]` extra 后显式启用 Go2 模式。 |
 | 启动报错 `PerceiveLoopSkill ... AgentSpec ... No module met that spec` | 当前部署缺少 `StandaloneAgentBridge`，通常是底层包未更新或仍在运行旧的 editable-install 源码；更新 `components/dimos-mcp` 后重新安装并启动。不要通过加入官方 `McpClient` 修复，否则会在底层额外运行 LLM Agent。 |
 | 想用 hook 拦截危险动作 | 当前 hook 不是拦截器。应在下层实现明确、可测试的安全策略。 |
-| 动作未按预期结束 | 立即调用 `stop_motion`，再检查下层日志和独立急停状态。 |
-| 导航、探索、巡逻或散步没有停止 | 调用与当前任务对应的 `stop_navigation`、`end_exploration`、`stop_patrol` 或 `stop_stroll`；`stop_motion` 不取消这些后台任务。 |
+| 动作未按预期结束 | 立即调用 `stop_all`，检查返回的 `failed_components` 和逐项 `results`，再检查下层日志与独立急停状态。 |
+| 导航、探索、巡逻或散步没有停止 | 不要调用已隐藏的专项停止方法；再次确认 `stop_all` 已到达底层，并按其逐项结果定位失败组件。 |
 
 ## 文档维护规则
 

@@ -68,7 +68,7 @@ class DimosIntegrationTests(unittest.TestCase):
         self._adapter.call(
             "tools/call",
             {
-                "name": "stop_motion",
+                "name": "stop_all",
                 "arguments": {},
             },
         )
@@ -81,7 +81,7 @@ class DimosIntegrationTests(unittest.TestCase):
             {
                 "move_forward",
                 "move_backward",
-                "stop_motion",
+                "stop_all",
                 "motion_status",
                 "server_status",
                 "list_modules",
@@ -94,16 +94,39 @@ class DimosIntegrationTests(unittest.TestCase):
                 "observe",
                 "tag_location",
                 "navigate_with_text",
-                "stop_navigation",
                 "begin_exploration",
-                "end_exploration",
                 "start_patrol",
-                "stop_patrol",
                 "look_out_for",
-                "stop_looking_out",
                 "return_to_start",
                 "start_stroll",
-                "stop_stroll",
+            },
+        )
+
+    def test_dry_run_stop_all_stops_motion_and_reports_other_activities_as_not_configured(
+        self,
+    ) -> None:
+        result = self._adapter.call(
+            "tools/call",
+            {
+                "name": "stop_all",
+                "arguments": {},
+            },
+        )
+        payload = json.loads(result["result"]["content"][0]["text"])
+        self.assertEqual(payload["status"], "stopped")
+        self.assertEqual(payload["results"]["motion"]["status"], "success")
+        self.assertEqual(
+            {
+                name: item["status"]
+                for name, item in payload["results"].items()
+                if name != "motion"
+            },
+            {
+                "exploration": "not_configured",
+                "patrol": "not_configured",
+                "stroll": "not_configured",
+                "lookout": "not_configured",
+                "navigation": "not_configured",
             },
         )
 
@@ -179,6 +202,7 @@ class DimosIntegrationTests(unittest.TestCase):
                 "HomeNavigationSkill",
                 "StrollSkill",
                 "DogMotionSkill",
+                "Go2StopAllSkill",
                 "DogMcpServer",
             }
             <= module_names
@@ -237,7 +261,7 @@ class DimosIntegrationTests(unittest.TestCase):
         second_payload = json.loads(second["result"]["content"][0]["text"])
         self.assertEqual(second_payload["status"], "error")
 
-        self._adapter.call("tools/call", {"name": "stop_motion", "arguments": {}})
+        self._adapter.call("tools/call", {"name": "stop_all", "arguments": {}})
 
     def test_invalid_motion_uses_structured_error_result(self) -> None:
         result = self._adapter.call(

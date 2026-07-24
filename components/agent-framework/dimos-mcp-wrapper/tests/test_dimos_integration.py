@@ -55,7 +55,7 @@ class DimosWrapperIntegrationTests(unittest.TestCase):
             {
                 "move_forward",
                 "move_backward",
-                "stop_motion",
+                "stop_all",
                 "motion_status",
                 "server_status",
                 "list_modules",
@@ -69,15 +69,10 @@ class DimosWrapperIntegrationTests(unittest.TestCase):
                 "tag_location",
                 "navigate_with_text",
                 "return_to_start",
-                "stop_navigation",
                 "begin_exploration",
-                "end_exploration",
                 "start_patrol",
-                "stop_patrol",
                 "look_out_for",
-                "stop_looking_out",
                 "start_stroll",
-                "stop_stroll",
             },
         )
 

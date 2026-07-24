@@ -12,7 +12,7 @@ PUBLIC_TOOL_NAMES = frozenset(
     {
         "move_forward",
         "move_backward",
-        "stop_motion",
+        "stop_all",
         "motion_status",
         "server_status",
         "list_modules",
@@ -26,15 +26,10 @@ PUBLIC_TOOL_NAMES = frozenset(
         "tag_location",
         "navigate_with_text",
         "return_to_start",
-        "stop_navigation",
         "begin_exploration",
-        "end_exploration",
         "start_patrol",
-        "stop_patrol",
         "look_out_for",
-        "stop_looking_out",
         "start_stroll",
-        "stop_stroll",
     }
 )
 

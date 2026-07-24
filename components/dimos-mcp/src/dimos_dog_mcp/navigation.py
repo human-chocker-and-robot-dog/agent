@@ -5,23 +5,8 @@ from __future__ import annotations
 import json
 
 from dimos.agents.annotation import skill
+from dimos.core.core import rpc
 from dimos.core.module import Module
-
-
-NAVIGATION_TOOL_NAMES = frozenset(
-    {
-        "tag_location",
-        "navigate_with_text",
-        "return_to_start",
-        "stop_navigation",
-        "begin_exploration",
-        "end_exploration",
-        "start_patrol",
-        "stop_patrol",
-        "start_stroll",
-        "stop_stroll",
-    }
-)
 
 
 class DryRunNavigationSkill(Module):
@@ -89,7 +74,7 @@ class DryRunNavigationSkill(Module):
 
         return self._unavailable("return_to_start")
 
-    @skill
+    @rpc
     def stop_navigation(self) -> str:
         """Report that no live navigation stack is active in dry-run."""
 
@@ -101,7 +86,7 @@ class DryRunNavigationSkill(Module):
 
         return self._unavailable("begin_exploration")
 
-    @skill
+    @rpc
     def end_exploration(self) -> str:
         """Report that no live exploration process is active in dry-run."""
 
@@ -113,7 +98,7 @@ class DryRunNavigationSkill(Module):
 
         return self._unavailable("start_patrol")
 
-    @skill
+    @rpc
     def stop_patrol(self) -> str:
         """Report that no live patrol process is active in dry-run."""
 
@@ -125,7 +110,7 @@ class DryRunNavigationSkill(Module):
 
         return self._unavailable("start_stroll")
 
-    @skill
+    @rpc
     def stop_stroll(self) -> str:
         """Report that no live stroll is active in dry-run."""
 
@@ -144,7 +129,7 @@ class DryRunNavigationSkill(Module):
             {"description_of_things": description_of_things, "then": then},
         )
 
-    @skill
+    @rpc
     def stop_looking_out(self) -> str:
         """Report that no live visual lookout is active in dry-run."""
 

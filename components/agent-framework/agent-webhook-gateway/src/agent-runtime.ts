@@ -29,7 +29,7 @@ export function buildAgentSystemPrompt(defaultSpeedMps: number): string {
 - tag_location 只用于把机器狗当前地图位置保存为名称。
 - “回到起点”或“返回启动位置”使用 return_to_start；它返回本次下层进程捕获的第一帧有效里程计位置，不依赖手工打点。
 - “探索未知区域并尽量覆盖”使用 begin_exploration；“在已建图区域来回巡视”使用 start_patrol；“像人散步一样随机选一条未知分支并放弃其他分支”使用 start_stroll，三者不得混为一谈。
-- 停止定点导航、探索、巡逻和散步分别使用 stop_navigation、end_exploration、stop_patrol、stop_stroll。
+- 停止任何活动都使用 stop_all；它会统一停止定时速度、定点导航、探索、巡逻、散步和持续视觉查找。
 - 导航、探索、巡逻、散步、视觉和设备控制只在下层 Go2 模式可用；下层返回 dry-run 或错误时，必须如实告诉用户没有启动真实能力。
 
 规范化后精确等于“停”或“stop”的输入会在进入你之前由输入网关处理。其他文本都作为普通用户请求处理。`;
@@ -108,18 +108,12 @@ export function createDogTools(mcp: McpToolCaller) {
 		}),
 	});
 
-	const stopMotion = defineTool({
-		name: "stop_motion",
-		label: "Stop Motion",
-		description: "向机器狗 MCP 发送一次停止运动指令。",
-		promptSnippet: "停止当前机器狗运动",
-		parameters: Type.Object({}, { additionalProperties: false }),
-		executionMode: "sequential",
-		execute: async (_toolCallId, _params, signal) => ({
-			content: [{ type: "text", text: await mcp.callTool("stop_motion", {}, signal) }],
-			details: {},
-		}),
-	});
+	const stopAll = noArgumentTool(
+		"stop_all",
+		"Stop All",
+		"统一停止定时速度、定点导航、探索、巡逻、散步和持续视觉查找。",
+		"停止机器狗当前的所有活动",
+	);
 
 	const motionStatus = defineTool({
 		name: "motion_status",
@@ -309,19 +303,6 @@ export function createDogTools(mcp: McpToolCaller) {
 		"返回本次运行的启动位置",
 	);
 
-	const stopNavigation = defineTool({
-		name: "stop_navigation",
-		label: "Stop Navigation",
-		description: "取消当前定点导航目标。",
-		promptSnippet: "停止当前定点导航",
-		parameters: Type.Object({}, { additionalProperties: false }),
-		executionMode: "sequential",
-		execute: async (_toolCallId, _params, signal) => ({
-			content: [{ type: "text", text: await mcp.callTool("stop_navigation", {}, signal) }],
-			details: {},
-		}),
-	});
-
 	const beginExploration = defineTool({
 		name: "begin_exploration",
 		label: "Begin Exploration",
@@ -335,19 +316,6 @@ export function createDogTools(mcp: McpToolCaller) {
 		}),
 	});
 
-	const endExploration = defineTool({
-		name: "end_exploration",
-		label: "End Exploration",
-		description: "停止当前 DIMOS 自主探索。",
-		promptSnippet: "停止自主探索",
-		parameters: Type.Object({}, { additionalProperties: false }),
-		executionMode: "sequential",
-		execute: async (_toolCallId, _params, signal) => ({
-			content: [{ type: "text", text: await mcp.callTool("end_exploration", {}, signal) }],
-			details: {},
-		}),
-	});
-
 	const startPatrol = defineTool({
 		name: "start_patrol",
 		label: "Start Patrol",
@@ -357,19 +325,6 @@ export function createDogTools(mcp: McpToolCaller) {
 		executionMode: "sequential",
 		execute: async (_toolCallId, _params, signal) => ({
 			content: [{ type: "text", text: await mcp.callTool("start_patrol", {}, signal) }],
-			details: {},
-		}),
-	});
-
-	const stopPatrol = defineTool({
-		name: "stop_patrol",
-		label: "Stop Patrol",
-		description: "停止当前 DIMOS 自主巡逻。",
-		promptSnippet: "停止自主巡逻",
-		parameters: Type.Object({}, { additionalProperties: false }),
-		executionMode: "sequential",
-		execute: async (_toolCallId, _params, signal) => ({
-			content: [{ type: "text", text: await mcp.callTool("stop_patrol", {}, signal) }],
 			details: {},
 		}),
 	});
@@ -410,13 +365,6 @@ export function createDogTools(mcp: McpToolCaller) {
 		}),
 	});
 
-	const stopLookingOut = noArgumentTool(
-		"stop_looking_out",
-		"Stop Looking Out",
-		"停止 DIMOS 持续视觉查找。",
-		"停止寻找目标",
-	);
-
 	const startStroll = noArgumentTool(
 		"start_stroll",
 		"Start Stroll",
@@ -424,12 +372,10 @@ export function createDogTools(mcp: McpToolCaller) {
 		"开始非穷举的人类式自主散步",
 	);
 
-	const stopStroll = noArgumentTool("stop_stroll", "Stop Stroll", "停止当前人类式自主散步。", "停止自主散步");
-
 	return [
 		moveForward,
 		moveBackward,
-		stopMotion,
+		stopAll,
 		motionStatus,
 		serverStatus,
 		listModules,
@@ -443,15 +389,10 @@ export function createDogTools(mcp: McpToolCaller) {
 		tagLocation,
 		navigateWithText,
 		returnToStart,
-		stopNavigation,
 		beginExploration,
-		endExploration,
 		startPatrol,
-		stopPatrol,
 		lookOutFor,
-		stopLookingOut,
 		startStroll,
-		stopStroll,
 	] as const;
 }
 

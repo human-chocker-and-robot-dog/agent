@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dimos.agents.annotation import skill
 from dimos.agents.capabilities import CAP_MOVEMENT
+from dimos.core.core import rpc
 from dimos.msgs.geometry_msgs.Vector3 import Vector3
 from dimos.msgs.nav_msgs.OccupancyGrid import OccupancyGrid
 from dimos.navigation.frontier_exploration.wavefront_frontier_goal_selector import (
@@ -26,9 +27,9 @@ class StrollSkill(WavefrontFrontierExplorer):
         return "Use start_stroll."
 
     def end_exploration(self) -> str:
-        """This subclass exposes stop_stroll instead of another exploration tool."""
+        """Direct callers should use the unified public stop tool."""
 
-        return "Use stop_stroll."
+        return "Use stop_all."
 
     @skill(uses=[CAP_MOVEMENT], lifecycle="background")
     def start_stroll(self) -> str:
@@ -36,12 +37,12 @@ class StrollSkill(WavefrontFrontierExplorer):
 
         self.start_tool("start_stroll")
         if self.exploration_active:
-            return "Stroll is already running. Use `stop_stroll` to stop."
+            return "Stroll is already running. Use `stop_all` to stop."
         self.reset_exploration_session()
         self.explore()
-        return "Stroll started. Use `stop_stroll` to stop."
+        return "Stroll started. Use `stop_all` to stop."
 
-    @skill
+    @rpc
     def stop_stroll(self) -> str:
         """Stop the ongoing human-like stroll."""
 
@@ -86,4 +87,3 @@ class StrollSkill(WavefrontFrontierExplorer):
             self._run_exploration_loop()
         finally:
             self.stop_tool("start_stroll")
-

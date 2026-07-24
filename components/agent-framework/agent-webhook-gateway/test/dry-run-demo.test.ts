@@ -8,8 +8,8 @@ describe("local dry-run end-to-end demo", () => {
 		expect(summary).toEqual({
 			agentRuns: 1,
 			callbackInstructionIds: ["dry-run-stop", "dry-run-move"],
-			wrapperToolCalls: ["move_forward", "stop_motion"],
-			dogToolCalls: ["move_forward", "stop_motion"],
+			wrapperToolCalls: ["move_forward", "stop_all"],
+			dogToolCalls: ["move_forward", "stop_all"],
 		});
 	});
 });

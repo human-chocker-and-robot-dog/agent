@@ -22,7 +22,7 @@ describe("fixed Pi agent runtime", () => {
 		expect(tools.map((tool) => tool.name)).toEqual([
 			"move_forward",
 			"move_backward",
-			"stop_motion",
+			"stop_all",
 			"motion_status",
 			"server_status",
 			"list_modules",
@@ -36,15 +36,10 @@ describe("fixed Pi agent runtime", () => {
 			"tag_location",
 			"navigate_with_text",
 			"return_to_start",
-			"stop_navigation",
 			"begin_exploration",
-			"end_exploration",
 			"start_patrol",
-			"stop_patrol",
 			"look_out_for",
-			"stop_looking_out",
 			"start_stroll",
-			"stop_stroll",
 		]);
 	});
 
@@ -62,7 +57,7 @@ describe("fixed Pi agent runtime", () => {
 			expect(session.getActiveToolNames()).toEqual([
 				"move_forward",
 				"move_backward",
-				"stop_motion",
+				"stop_all",
 				"motion_status",
 				"server_status",
 				"list_modules",
@@ -76,15 +71,10 @@ describe("fixed Pi agent runtime", () => {
 				"tag_location",
 				"navigate_with_text",
 				"return_to_start",
-				"stop_navigation",
 				"begin_exploration",
-				"end_exploration",
 				"start_patrol",
-				"stop_patrol",
 				"look_out_for",
-				"stop_looking_out",
 				"start_stroll",
-				"stop_stroll",
 			]);
 			session.dispose();
 		} finally {

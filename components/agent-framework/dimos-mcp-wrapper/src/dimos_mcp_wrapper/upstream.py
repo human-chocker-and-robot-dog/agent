@@ -139,6 +139,4 @@ def _raise_for_tool_error(result_text: str) -> None:
         return
     if not isinstance(payload, dict) or payload.get("status") != "error":
         return
-    message = payload.get("error")
-    detail = message if isinstance(message, str) else "upstream dog tool failed"
-    raise UpstreamMcpError(detail)
+    raise UpstreamMcpError(result_text)

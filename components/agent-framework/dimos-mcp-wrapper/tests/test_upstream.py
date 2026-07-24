@@ -88,7 +88,7 @@ class HttpMcpToolClientTests(unittest.TestCase):
             )
 
             with self.assertRaises(UpstreamMcpError):
-                client.call_tool("stop_motion", {})
+                client.call_tool("stop_all", {})
 
             self.assertEqual(RedirectingHandler.request_count, 1)
         finally:
@@ -97,6 +97,10 @@ class HttpMcpToolClientTests(unittest.TestCase):
             thread.join(timeout=1.0)
 
     def test_tool_call_rejects_structured_dog_tool_error(self) -> None:
+        result_text = (
+            '{"status":"error","failed_components":["navigation"],'
+            '"results":{"navigation":{"status":"error","error":"navigation refused to stop"}}}'
+        )
         client = HttpMcpToolClient(
             "http://127.0.0.1:9990/mcp",
             timeout_s=1.0,
@@ -107,15 +111,16 @@ class HttpMcpToolClientTests(unittest.TestCase):
                     "content": [
                         {
                             "type": "text",
-                            "text": '{"status":"error","error":"movement is busy"}',
+                            "text": result_text,
                         }
                     ]
                 },
             },
         )
 
-        with self.assertRaisesRegex(UpstreamMcpError, "movement is busy"):
+        with self.assertRaises(UpstreamMcpError) as captured:
             client.call_tool("move_forward", {"speed_mps": 0.1, "duration_s": 1.0})
+        self.assertEqual(str(captured.exception), result_text)
 
     def test_tool_call_rejects_dimos_wrapped_exception(self) -> None:
         client = HttpMcpToolClient(
@@ -128,7 +133,7 @@ class HttpMcpToolClientTests(unittest.TestCase):
                     "content": [
                         {
                             "type": "text",
-                            "text": "Error running tool 'stop_motion': transport failed",
+                            "text": "Error running tool 'stop_all': transport failed",
                         }
                     ]
                 },
@@ -136,4 +141,4 @@ class HttpMcpToolClientTests(unittest.TestCase):
         )
 
         with self.assertRaisesRegex(UpstreamMcpError, "transport failed"):
-            client.call_tool("stop_motion", {})
+            client.call_tool("stop_all", {})

@@ -206,7 +206,7 @@ class DogMcpGui:
         self._forward_button.pack(side="left", padx=(0, 8))
         self._backward_button = ttk.Button(buttons, text="后退", command=self._move_backward)
         self._backward_button.pack(side="left", padx=(0, 8))
-        self._stop_button = ttk.Button(buttons, text="立即停止", command=self._stop_motion)
+        self._stop_button = ttk.Button(buttons, text="全部停止", command=self._stop_all)
         self._stop_button.pack(side="left", padx=(0, 8))
         ttk.Button(buttons, text="查询状态", command=self._query_status).pack(side="left", padx=(0, 8))
         ttk.Button(buttons, text="检查连接", command=self._check_connection).pack(side="left")
@@ -263,14 +263,14 @@ class DogMcpGui:
             kind="motion",
         )
 
-    def _stop_motion(self) -> None:
+    def _stop_all(self) -> None:
         if self._stop_call_pending:
             self._status.set("停止请求正在发送；不会自动重试。")
             return
         self._stop_call_pending = True
         self._stop_button.configure(state="disabled")
         self._status.set("正在发送停止请求。")
-        self._submit_call("停止", "tools/call", {"name": "stop_motion", "arguments": {}}, kind="stop")
+        self._submit_call("全部停止", "tools/call", {"name": "stop_all", "arguments": {}}, kind="stop")
 
     def _query_status(self) -> None:
         self._submit_call("状态查询", "tools/call", {"name": "motion_status", "arguments": {}}, kind="other")

@@ -8,8 +8,8 @@ from dimos_dog_mcp.tool_contract import PUBLIC_TOOL_NAMES
 
 
 class StrollPolicyTests(unittest.TestCase):
-    def test_versioned_public_contract_contains_18_official_and_7_custom_tools(self) -> None:
-        self.assertEqual(len(PUBLIC_TOOL_NAMES), 25)
+    def test_versioned_public_contract_exposes_only_the_unified_stop_tool(self) -> None:
+        self.assertEqual(len(PUBLIC_TOOL_NAMES), 20)
         self.assertTrue(
             {
                 "server_status",
@@ -17,13 +17,23 @@ class StrollPolicyTests(unittest.TestCase):
                 "start_patrol",
                 "return_to_start",
                 "start_stroll",
-                "stop_stroll",
+                "stop_all",
             }
             <= PUBLIC_TOOL_NAMES
         )
-        self.assertNotIn("speak", PUBLIC_TOOL_NAMES)
-        self.assertNotIn("follow_person", PUBLIC_TOOL_NAMES)
-        self.assertNotIn("stop_following", PUBLIC_TOOL_NAMES)
+        self.assertTrue(
+            {
+                "speak",
+                "follow_person",
+                "stop_following",
+                "stop_motion",
+                "stop_navigation",
+                "end_exploration",
+                "stop_patrol",
+                "stop_stroll",
+                "stop_looking_out",
+            }.isdisjoint(PUBLIC_TOOL_NAMES)
+        )
 
     def test_randomly_chooses_one_branch_and_retires_its_siblings(self) -> None:
         policy = StrollPolicy(random.Random(7))

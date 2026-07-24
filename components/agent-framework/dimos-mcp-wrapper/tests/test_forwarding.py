@@ -128,9 +128,9 @@ class ForwardingServiceTests(unittest.TestCase):
         service = ForwardingService(client)
         try:
             with self.assertRaisesRegex(UpstreamMcpError, "upstream unavailable"):
-                service.forward("stop_motion", {})
+                service.forward("stop_all", {})
 
-            self.assertEqual(client.calls, [("stop_motion", {})])
+            self.assertEqual(client.calls, [("stop_all", {})])
         finally:
             service.close()
 

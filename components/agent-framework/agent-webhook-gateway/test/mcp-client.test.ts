@@ -46,7 +46,7 @@ describe("HTTP MCP tool client", () => {
 			);
 		});
 
-		await expect(client.callTool("stop_motion", {})).rejects.toThrow("upstream stop failed");
+		await expect(client.callTool("stop_all", {})).rejects.toThrow("upstream stop failed");
 	});
 
 	it("treats a DIMOS wrapped exception as a failed call", async () => {
@@ -56,14 +56,14 @@ describe("HTTP MCP tool client", () => {
 					jsonrpc: "2.0",
 					id: 1,
 					result: {
-						content: [{ type: "text", text: "Error running tool 'stop_motion': transport failed" }],
+						content: [{ type: "text", text: "Error running tool 'stop_all': transport failed" }],
 					},
 				}),
 				{ status: 200, headers: { "content-type": "application/json" } },
 			);
 		});
 
-		await expect(client.callTool("stop_motion", {})).rejects.toThrow("transport failed");
+		await expect(client.callTool("stop_all", {})).rejects.toThrow("transport failed");
 	});
 
 	it("treats a structured wrapper error as a failed call", async () => {

@@ -14,6 +14,7 @@ from .home import HomeNavigationSkill
 from .module import DogMotionSkill
 from .navigation import DryRunNavigationSkill
 from .server import DogMcpServer
+from .stop import StopAllSkill
 from .stroll import StrollSkill
 
 try:
@@ -23,11 +24,14 @@ try:
     )
     from dimos.robot.unitree.go2.connection import GO2Connection
     from dimos.robot.unitree.unitree_skill_container import UnitreeSkillContainer
+
+    from .go2_stop import Go2StopAllSkill
 except ModuleNotFoundError:
     NavigationSkillContainer = None
     unitree_go2_spatial = None
     GO2Connection = None
     UnitreeSkillContainer = None
+    Go2StopAllSkill = None
 
 
 def build_blueprint():
@@ -39,6 +43,7 @@ def build_blueprint():
         DryRunTwistSink.blueprint(),
         DogMotionSkill.blueprint(),
         DryRunNavigationSkill.blueprint(),
+        StopAllSkill.blueprint(),
         DogMcpServer.blueprint(),
     )
 
@@ -51,6 +56,7 @@ def _build_go2_blueprint():
         or unitree_go2_spatial is None
         or GO2Connection is None
         or UnitreeSkillContainer is None
+        or Go2StopAllSkill is None
     ):
         raise RuntimeError(
             "Go2 navigation mode requires the optional dependency; "
@@ -64,6 +70,7 @@ def _build_go2_blueprint():
         HomeNavigationSkill.blueprint(),
         StrollSkill.blueprint(),
         DogMotionSkill.blueprint(),
+        Go2StopAllSkill.blueprint(),
         StandaloneAgentBridge.blueprint(),
         DogMcpServer.blueprint(),
     )
