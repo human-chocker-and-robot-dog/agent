@@ -10,6 +10,8 @@
 
 本文描述的是当前项目已经存在的实现，不是未来设计草案。任何接入方都应以本文定义的 HTTP 契约为准，同时注意本文明确列出的模型行为边界和尚未实现能力。
 
+本文只定义普通用户文本和最终回复。智能项圈的独立 `/v1/health-events`、HMAC、durable health queue 和只读 Health MCP 消费流程见 [Health MCP v0.2 消费端对接指南](health-mcp-consumer-integration.md)；健康通知不得复用本接口。
+
 开始开发前，还应阅读：
 
 - 根目录 [CONTEXT.md](../CONTEXT.md)：系统边界、术语和不可违反的不变量。
@@ -37,7 +39,7 @@
 
 ### 1.2 当前没有实现
 
-以下能力不属于 MVP v0.1，接入方不得假设其存在：
+以下能力不属于普通 instruction/reply MVP v0.1，接入方不得假设其存在：
 
 - 入站或出站 Webhook 身份认证。
 - 请求签名、时间戳校验或重放防护。
@@ -99,7 +101,7 @@ flowchart LR
 
 ### 4.1 Endpoint
 
-当前只接受以下方法和精确路径：
+当前普通指令域只接受以下方法和精确路径：
 
 ```http
 POST /v1/instructions

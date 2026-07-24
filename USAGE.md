@@ -6,6 +6,8 @@
 
 输入端系统向 Agent 输入用户文本、并由回复接收端接收最终回复时，遵循 [Agent 输入与最终回复 Webhook 对接指南](docs/agent-input-webhook-integration.md)。输入端负责确认每个 Webhook 都是完整真实请求；本框架不处理麦克风或语音识别。`components/agent-framework/agent-webhook-gateway` 已实现持久化输入网关、固定 Pi Agent 会话和输出投递器：Agent 无法完成时返回固定的用户可见文本，便于回复接收端直接显示或 TTS 朗读；系统提示词要求模型对参数不明确的运动请求追问，并支持“速度加时长”“距离加时长”或仅说距离，方向可选且默认向前，其中距离仅按部署标定速度进行估算。Agent 可调用锁定版 DiMOS 的 14 个非停止官方 MCP 工具及 6 个自研工具。官方 `speak`、人员跟随及各专项停止工具不在公开契约中：最终用户语音由回复接收端负责，底层不需要 OpenAI TTS 凭据；人员跟随要求本项目不支持的 `ALIBABA_API_KEY`；停止统一使用 `stop_all`。该自然语言语义目前没有程序级策略门，不能当作确定性安全保证。规范化后精确等于“停”或 `stop` 的语音停止口令会由代码绕过 Agent 并直接触发 `stop_all`，被 MCP 接受后返回“已发送停止指令。”。`stop_all` 会尝试停止定时速度、定点导航、探索、巡逻、散步和持续视觉查找，但仍不等同于物理急停。不要把 MCP 端点当作文本输入端点。
 
+智能项圈 Health MCP v0.2 使用同一 Gateway 进程中的独立验签入口和 durable health queue，详见 [Health MCP v0.2 消费端对接指南](docs/health-mcp-consumer-integration.md)。健康通知不会进入 Agent，也不会触发机器狗动作；项圈采集、事件生成和 Health MCP Server 仍由上游 `smart-neckband` 仓库负责。
+
 ## 架构与职责
 
 ~~~mermaid
@@ -18,12 +20,14 @@ flowchart LR
     C -->|显式启用| G["Unitree Go2"]
     W -. 生命周期事件 .-> K["可选 hook"]
     A -->|最终回复 Webhook| O["回复接收端"]
+    H["智能项圈"] -->|"signed /v1/health-events"| A
+    A -->|"stdio read-only Health MCP"| M["smart-neckband Health MCP"]
 ~~~
 
 | 层级 | 组件 | 使用者应负责的事项 |
 | --- | --- | --- |
 | 上层 | MCP Host / Agent | 需要 hook 或 Agent Gateway 时连接包装器；独立 MCP Host 也可直接连接底层。 |
-| Agent Webhook 层 | `components/agent-framework/agent-webhook-gateway` | 持久化用户文本、串行运行固定 Agent 会话并投递最终回复。 |
+| Agent Webhook 层 | `components/agent-framework/agent-webhook-gateway` | 持久化用户文本、串行运行固定 Agent 会话并投递最终回复；在独立队列中验签和消费 Health 通知。 |
 | 转发层 | `components/agent-framework/dimos-mcp-wrapper` | 原样、单次转发工具调用；可发出非阻塞 hook 事件。 |
 | 下层 | `components/dimos-mcp` | 部署在机器狗侧主机，公开 14 个受支持的 DiMOS `0.0.14b1` 官方工具与 6 个自研工具；Go2 模式组合官方空间、导航和机器人技能及自研导航扩展，但不运行模型、Agent 循环、云端 TTS 或人员跟随。 |
 | 硬件层 | DIMOS 连接与导航模块 | dry-run 只模拟定时运动；显式 Go2 模式消费传感器与 `cmd_vel` 并执行官方导航。 |
@@ -38,7 +42,7 @@ Agent Webhook Gateway 不应直接连接底层机器狗 MCP，否则会绕过包
 - 默认运行模式是 dry-run：不会连接、站立或移动真实机器狗。
 - 启用真实 Go2 前，必须完成场地隔离、独立急停、低延迟网络和厂商/DIMOS 网络预检。
 - Go2 模式会在官方连接、站立与平衡初始化完成后显式启用固件 joystick 输入。锁定版 DiMOS wheel 未公开 `switch_joystick` RPC，因此入口通过现有 `GO2Connection.publish_request` 向 Sport endpoint 发送 API `1027` / `data=true`。响应状态码不为 `0`、结构无效或调用抛出异常时，下层进程停止全部模块并启动失败；dry-run 不执行该调用。
-- 当前 MCP 服务没有内建访问控制。不要把 `:9990/mcp` 或 `:9991/mcp` 暴露到不受信任网络；跨主机部署时应由可信网络和外部访问控制保护。
+- 当前机器狗 MCP 服务没有内建访问控制。不要把 `:9990/mcp` 或 `:9991/mcp` 暴露到不受信任网络；跨主机部署时应由可信网络和外部访问控制保护。普通 instruction/reply Webhook 同样没有认证。Health Webhook 具有独立 raw-body HMAC 和时间戳校验，但非 loopback 部署仍必须使用 TLS、主机防火墙和 secret 轮换。
 
 ## 接入下层机器狗
 
@@ -270,6 +274,31 @@ POST http://网关主机:8080/v1/instructions
 
 其余超时和回复重投配置见 `components/agent-framework/agent-webhook-gateway/README.md`。HTTP 请求与回复 schema、停止口令规范化规则及下层开发者验收清单见 [Webhook 对接指南](docs/agent-input-webhook-integration.md)。
 
+### 智能项圈 Health MCP v0.2（可选）
+
+Health 消费端默认关闭。它不要求模型、DIMOS 或真实机器狗；启用时必须同时配置 wearer、当前 key ID 和 64 位小写十六进制 secret：
+
+~~~powershell
+$env:AGENT_WEBHOOK_HEALTH_WEARER_ID = "xwen"
+$env:AGENT_WEBHOOK_HEALTH_KEY_ID = "health-webhook-2026-07"
+$env:AGENT_WEBHOOK_HEALTH_SECRET_HEX = "<64-lowercase-hex>"
+node dist/cli.js
+~~~
+
+默认使用以下 stdio 命令启动上游项圈 Health MCP：
+
+~~~text
+py -3.12 -m smart_neckband.health_mcp --transport stdio
+~~~
+
+如上游虚拟环境或入口不同，使用 `AGENT_WEBHOOK_HEALTH_MCP_COMMAND` 和 JSON string array 形式的 `AGENT_WEBHOOK_HEALTH_MCP_ARGS_JSON` 覆盖，不经过 shell 拼接。启用后接收：
+
+~~~text
+POST http://网关主机:8080/v1/health-events
+~~~
+
+入口完成 raw-body HMAC、时间戳、Schema 和原子幂等校验，持久化后返回 `202`。独立 worker 随后查询 event details 和 current state；只有 live、非 test、fresh 且 revision/source/wearer 一致的结果会记录 `verified_no_action`。该状态明确不调用 Agent、DimOS 或机器狗工具。完整 header、ACK、错误映射、key rotation 和测试说明见 [Health MCP v0.2 消费端对接指南](docs/health-mcp-consumer-integration.md)。
+
 ## 使用生命周期 hook
 
 包装器会为每次转发投递四种事件：
@@ -382,6 +411,13 @@ npm run demo:dry-run
 
 该演示使用真实网关核心、临时 SQLite 和临时 HTTP 端口，替身化固定 Agent、`dimos-mcp-wrapper`、`dimos-dog-mcp` 与回复接收端；它不会导入 DIMOS 或访问机器狗。命令会断言最终回调、`move_forward`/`stop_all` 在包装器及底层各调用一次，以及停止口令在普通 Agent 请求仍被阻塞时先完成回调。相同场景已纳入网关的 `npm test`。
 
+Health 消费端的 focused tests 同样只使用临时端口、临时 SQLite 和 stdio fake server：
+
+~~~powershell
+node node_modules/vitest/dist/cli.js --run test/health-webhook.test.ts
+node node_modules/vitest/dist/cli.js --run test/health-mcp-client.test.ts
+~~~
+
 ## 常见问题
 
 | 现象 | 排查方向 |
@@ -395,6 +431,9 @@ npm run demo:dry-run
 | 想用 hook 拦截危险动作 | 当前 hook 不是拦截器。应在下层实现明确、可测试的安全策略。 |
 | 动作未按预期结束 | 立即调用 `stop_all`，检查返回的 `failed_components` 和逐项 `results`，再检查下层日志与独立急停状态。 |
 | 导航、探索、巡逻或散步没有停止 | 不要调用已隐藏的专项停止方法；再次确认 `stop_all` 已到达底层，并按其逐项结果定位失败组件。 |
+| `/v1/health-events` 返回 `404` | Health 配置未启用；检查 wearer、当前 key ID 和 secret 是否在启动前完整设置。 |
+| Health 返回 `401 invalid_signature` | 检查 key ID、64 位小写十六进制 secret、raw body 是否被代理改写，以及双方时间。 |
+| Health 通知已 `202` 但没有后续结果 | `202` 只表示 durable ACK；检查 stdio Health MCP 命令、独立 health queue 和审计，不要转投普通 instruction FIFO。 |
 
 ## 文档维护规则
 

@@ -32,6 +32,9 @@
 | Agent 会话 | 部署内运行时 | 当前 MVP 中一个部署唯一且固定的 Agent 上下文；外部调用方不能指定或切换它。避免称其为外部会话路由。 |
 | Agent 回复事件 | 回复端契约 | 与 `instruction_id` 关联、带稳定 `reply_id` 的用户可见最终文本。Agent 无法完成时，文本固定替换为用户可见的回退语；避免称其为 MCP 结果或模型 token 流。 |
 | 输出投递器 | `components/agent-framework/agent-webhook-gateway` | 从持久化 outbox 向回复接收端的回调地址投递 Agent 回复事件。避免称其为 MCP hook。 |
+| 健康通知 | 独立输入端契约 | 智能项圈发送的、带稳定 `notification_id` 和 event revision 的 HMAC 唤醒通知；它不是权威健康状态，也不是自然语言指令。 |
+| Health Webhook 接收器 | `components/agent-framework/agent-webhook-gateway` | 在独立 health 表和队列中验签、原子去重并持久化 `/v1/health-events`，ACK 后查询上游只读 Health MCP。 |
+| 上游 Health MCP | 配置的 stdio 子进程 | `smart-neckband` 仓库实现的权威健康工程状态读取边界；本仓库不生产 ECG/IMU 状态或健康事件。 |
 
 ```mermaid
 flowchart LR
@@ -43,6 +46,8 @@ flowchart LR
     D --> E[dry-run or Go2]
     B -. non-blocking lifecycle events .-> F[hook adapters]
     G -->|agent.reply.completed| R[回复接收端]
+    H[智能项圈 Health Webhook] -->|signed /v1/health-events| G
+    G -->|stdio read-only tools| M[smart-neckband Health MCP]
 ```
 
 ## 不变量
@@ -58,7 +63,7 @@ flowchart LR
 9. 输出投递器必须先持久化 Agent 回复事件，再发起回调。回调失败只能重试投递，不得重新运行 Agent 或重复任何机器狗工具调用。
 10. 每个 Agent 回复事件只交付完整的最终用户可见文本。Agent 的系统提示词必须明确：该最终文本会直接发给用户，因此必须面向用户表达，不得将内部执行细节、工具调用或推理当作回复。
 11. 当前 MVP 每个部署只有一个固定 Agent 会话；输入网关不得接受或信任外部传入的 Agent 或会话路由标识。
-12. 当前 MVP 的入站和出站 Webhook 不提供身份校验、签名或重放防护；它们只能被视为受信任环境内的临时集成边界，不得被描述为安全的公网接口。
+12. 当前普通 instruction/reply Webhook 不提供身份校验、签名或重放防护；它们只能被视为受信任环境内的临时集成边界，不得被描述为安全的公网接口。独立 Health Webhook 使用 v0.2 raw-body HMAC、时间戳和 key rotation 契约，但仍需部署级网络与 TLS 防护。
 13. 除语音停止口令外，输入网关只承载异步的自然语言事件，不能作为实时控制或紧急停止路径；语音停止口令也不能替代独立、直接的物理安全路径。
 14. 固定 Agent 会话的外部指令事件按持久化受理顺序串行处理；一个事件达到终态后才开始下一事件，以保障 `instruction_id` 与 `reply_id` 的一对一关联。
 15. Agent 无法产出最终回复时，输出投递器仍发送普通的 `agent.reply.completed` 事件，并将 `text` 固定为“暂时无法完成此请求，请稍后重试。”；不得向下层暴露失败事件、原始异常、工具错误或部分模型文本。
@@ -74,6 +79,10 @@ flowchart LR
 25. `start_patrol` 只在已经建图的区域按官方覆盖路由持续巡视。`start_stroll` 使用官方 Frontier 检测与导航，但在每个局部未知分支决策点随机选择一条、退休同一决策点的其他分支、拒绝回头补覆盖；无顺向候选时结束。该策略有意遗漏可探索区域，不得描述为巡逻或完整探索。
 26. 底层 Go2 Blueprint 不得组合官方 `McpClient` 或任何 LLM Agent。官方 `PerceiveLoopSkill` 所需的 `AgentSpec` 由无模型的 `StandaloneAgentBridge` 提供：无 `then` 的视觉命中继续通过 MCP 工具流通知上层；带 `then` 的命中只允许经底层本机公开 MCP 端点调用一个公开工具。该桥接器不是对话 Agent，也不拥有用户会话。
 27. Go2 实机入口必须等待 `ModuleCoordinator.build()` 完成官方模块启动，再通过锁定版 `GO2Connection.publish_request` 向官方 Sport endpoint 发送 `SwitchJoystick`（API `1027`，`data=true`），显式启用 `cmd_vel` 使用的固件输入。响应状态码不为 `0`、响应结构无效或调用抛出异常时，必须停止 coordinator 并让进程启动失败；不得进入服务主循环或声称 MCP 已就绪。状态码成功不是独立的底盘运动证明，dry-run 不执行该调用。
+28. Health Webhook 必须使用独立 `/v1/health-events`、表、去重命名空间、durable queue 和 worker；不得复用 `/v1/instructions`、普通 Agent FIFO 或 reply outbox。
+29. Health Webhook body 只作为唤醒通知。ACK 只表示通知已验签、按 raw-body digest 原子持久化和入队；处理方必须再查询 `health.get_event_details` 与 `health.get_current_state`。
+30. Health 消费方在固定代码中要求 contract `0.2.0`、event revision 不回退、wearer/source 一致、`data_source=live`、`test_mode=false` 和 `freshness=fresh`。任何失败都不得使用旧生理值或交给 LLM 绕过。
+31. v0.2 Health 事件不得调用 Agent、DimOS 或机器狗工具。`verified_no_action` 只表示权威状态检查与审计完成，不表示健康正常、医学安全或任何物理动作完成。
 
 ## 运行约束
 
@@ -84,6 +93,7 @@ flowchart LR
 - 独立底层 MCP 默认只监听 `127.0.0.1:9990`。跨机器调用时必须显式设置 `DIMOS_DOG_MCP_HOST=0.0.0.0` 或指定 interface 地址，并通过受信任网络和主机防火墙限制访问。
 - 包装器默认请求超时为 10 秒，配置通过 `DIMOS_MCP_WRAPPER_*` 环境变量提供。它不直接打开硬件连接。
 - Agent Webhook Gateway 要求 Node.js 22.19 或更高版本，使用 Node 原生 SQLite 持久化 inbox/outbox，并读取既有 Pi Agent 模型与认证配置。
+- Health 消费端默认关闭。完整配置 wearer、当前 HMAC key/secret 后，Gateway 才启用 `/v1/health-events`，并按配置用 stdio 启动上游 Health MCP；不配置时不会打开健康入口或子进程。
 
 ## 测试 seam
 
@@ -96,5 +106,7 @@ flowchart LR
 - 固定 Agent seam：普通事件按持久化顺序串行处理，系统提示词明确最终输出直接面向用户，20 个包装器 MCP 工具保持激活。
 - 输出 Webhook seam：完整终态回复、稳定 `reply_id`、失败重投与进程恢复均不得重跑 Agent 或 MCP 工具。
 - 停止快速路径 seam：只匹配规范化后的“停”或 `stop`，绕过 Agent 并单次调用 `stop_all`；底层逐项停止并报告失败组件。
+- Health Webhook seam：上游 golden raw-body HMAC、严格验证顺序、并发原子去重、独立 durable queue、`202 accepted|duplicate` 与固定错误映射。
+- Health MCP seam：stdio initialize、两个只读查询、TextContent/structuredContent 一致性，以及 live/test/freshness/revision 固定门；结果永不进入机器狗动作路径。
 
 这些名称应直接用于后续的实现、测试、Issue 和设计讨论，避免将包装器误称为机器人控制器或将 hook 误称为同步拦截器。

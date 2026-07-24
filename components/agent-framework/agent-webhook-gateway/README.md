@@ -1,6 +1,6 @@
 # Agent Webhook Gateway
 
-该服务实现固定 Pi Agent 会话的持久化输入网关和输出投递器。输入端只提交用户文本；Agent 通过 `dimos-mcp-wrapper` 使用 DiMOS `0.0.14b1` 的 14 个非停止官方工具和 6 个自研工具；回复接收端只收到完整的最终用户可见文本，并可在上层进行 TTS。
+该服务实现固定 Pi Agent 会话的持久化输入网关和输出投递器，并可选实现智能项圈 Health MCP v0.2 的独立消费端。输入端只提交用户文本；Agent 通过 `dimos-mcp-wrapper` 使用 DiMOS `0.0.14b1` 的 14 个非停止官方工具和 6 个自研工具；回复接收端只收到完整的最终用户可见文本，并可在上层进行 TTS。Health 通知使用独立验签、表、队列和 stdio MCP client，不进入 Agent，也不触发物理动作。
 
 ```mermaid
 flowchart LR
@@ -9,6 +9,8 @@ flowchart LR
     Q --> A["固定 Pi Agent 会话"]
     A --> W["dimos-mcp-wrapper :9991/mcp"]
     G -->|"agent.reply.completed"| R["回复接收端"]
+    H["智能项圈"] -->|"signed /v1/health-events"| G
+    G -->|"stdio Health MCP"| M["smart-neckband Health MCP"]
 ```
 
 ## 安装
@@ -54,8 +56,15 @@ POST http://127.0.0.1:8080/v1/instructions
 | `AGENT_WEBHOOK_AGENT_DIR` | `~/.pi/agent` | Pi 模型、认证和设置目录。 |
 | `AGENT_WEBHOOK_SESSION_DIR` | `<cwd>/data/agent-session` | 固定 Agent 会话的持久化目录。 |
 | `AGENT_WEBHOOK_DEFAULT_SPEED_MPS` | `0.1` | 用户只给距离时用于估算时长的部署标定速度。 |
+| `AGENT_WEBHOOK_HEALTH_WEARER_ID` | 无 | 设置后启用 Health；单实例 wearer ID。 |
+| `AGENT_WEBHOOK_HEALTH_KEY_ID` | 无 | Health 当前 HMAC key ID。 |
+| `AGENT_WEBHOOK_HEALTH_SECRET_HEX` | 无 | Health 当前 32-byte secret 的 64 位小写十六进制编码。 |
+| `AGENT_WEBHOOK_HEALTH_PREVIOUS_KEY_ID` / `AGENT_WEBHOOK_HEALTH_PREVIOUS_SECRET_HEX` | 无 | 可选的前一个轮换 key；必须成对配置。 |
+| `AGENT_WEBHOOK_HEALTH_MCP_COMMAND` | `py` | 上游 stdio Health MCP 可执行文件。 |
+| `AGENT_WEBHOOK_HEALTH_MCP_ARGS_JSON` | `["-3.12","-m","smart_neckband.health_mcp","--transport","stdio"]` | 不经过 shell 的参数数组。 |
+| `AGENT_WEBHOOK_HEALTH_MCP_TIMEOUT_MS` | `10000` | Health MCP initialize/tools call 超时。 |
 
-当前 MVP 没有身份校验、签名或重放防护，只能部署在受信任网络。
+普通 instruction/reply MVP 没有身份校验、签名或重放防护，只能部署在受信任网络。可选 Health endpoint 使用 raw-body HMAC、`±300` 秒时间戳和当前/前一 key rotation，但非 loopback 部署仍需 TLS 和网络访问控制。
 
 ## 行为
 
@@ -68,8 +77,10 @@ POST http://127.0.0.1:8080/v1/instructions
 - Agent 或停止调用失败时仍产生普通回复事件，文本固定为“暂时无法完成此请求，请稍后重试。”。
 - outbox 先持久化再回调。回调失败只重投同一 `reply_id`，不会重跑 Agent 或 MCP 工具。
 - 进程启动时若发现上次运行中断在 `processing` 状态，会生成固定失败回复而不重跑该事件，避免重复机器狗副作用。
+- Health 通知在独立 SQLite 表和 queue 中按 raw-body digest 原子去重，ACK 后查询权威 Health MCP。
+- Health worker 固定检查 contract、revision、wearer/source、live/test/freshness；通过时只记录 `verified_no_action`，不会调用 Agent 或机器狗 MCP。
 
-完整 HTTP schema 见 `docs/agent-input-webhook-integration.md`。
+普通 HTTP schema 见 `docs/agent-input-webhook-integration.md`；Health 配置、header、ACK 和错误映射见 `docs/health-mcp-consumer-integration.md`。
 
 ## 开发
 

@@ -1,4 +1,5 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
+import type { HealthWebhookReceiver } from "./health-webhook.ts";
 import { type AgentWebhookService, InstructionConflictError } from "./service.ts";
 
 const MAX_BODY_BYTES = 64 * 1024;
@@ -41,8 +42,12 @@ function parseInstruction(value: unknown): { instructionId: string; text: string
 	return { instructionId: record.instruction_id, text: record.text };
 }
 
-export function createInstructionServer(service: AgentWebhookService): Server {
+export function createInstructionServer(service: AgentWebhookService, healthReceiver?: HealthWebhookReceiver): Server {
 	return createServer(async (request, response) => {
+		if (request.url === "/v1/health-events" && healthReceiver) {
+			await healthReceiver.handle(request, response);
+			return;
+		}
 		if (request.method !== "POST" || request.url !== "/v1/instructions") {
 			sendJson(response, 404, { error: "not_found" });
 			return;
